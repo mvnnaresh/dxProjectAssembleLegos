@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include "dxRobotPickAndPlace.h"
 #include "dxRobotSimulator.h"
 
 int main()
@@ -10,7 +11,15 @@ int main()
     dxRobotSimulator simulator(modelPath, true);
     if (!simulator.init())
         return 1;
-    simulator.run();
+    dxRobotPickAndPlace pickAndPlace(&simulator);
+
+    const int stepsPerFrame = 10;
+    while (simulator.viewer() && !simulator.viewer()->shouldClose())
+    {
+        pickAndPlace.update();
+        simulator.step(stepsPerFrame);
+        simulator.viewer()->renderOnce();
+    }
     return 0;
 }
 /*
