@@ -8,6 +8,7 @@ int main()
     if (!app.init())
         return -1;
 
+    app.test();
     app.run(10);
     return 0;
 }

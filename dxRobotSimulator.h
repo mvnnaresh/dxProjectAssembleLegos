@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <array>
 #include <vector>
 
 #include <mujoco/mujoco.h>
@@ -11,6 +12,15 @@
 class dxRobotSimulator
 {
 public:
+    struct RobotState
+    {
+        std::vector<double> qpos;
+        std::vector<double> qvel;
+        std::vector<double> ctrl;
+        std::array<double, 3> eePos = { 0.0, 0.0, 0.0 };
+        std::array<double, 4> eeQuat = { 1.0, 0.0, 0.0, 0.0 };
+    };
+
     explicit dxRobotSimulator(const std::string& modelPath, bool createViewer = true);
     ~dxRobotSimulator();
 
@@ -31,6 +41,8 @@ public:
     std::vector<double> getQpos() const;
     std::vector<double> getQvel() const;
     std::vector<double> getCtrl() const;
+    RobotState getState() const;
+    bool setState(const RobotState& state);
 
     bool setCtrl(int actuatorIndex, double value);
     bool setCtrlByName(const std::string& actuatorName, double value);

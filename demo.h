@@ -19,6 +19,7 @@ public:
     void step(int steps = 1);
     void run(int stepsPerFrame = 10);
     void moveRobotToJointPos(const std::vector<double>& jointsRad);
+    void test();
 
     dxRobotViewerFactory* viewer() const { return mSim ? mSim->viewer() : nullptr; }
 
@@ -27,5 +28,9 @@ private:
     mutable std::mutex mTargetMutex;
     std::array<double, 6> mTargetJoints = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
     bool mHasTarget = false;
+    std::mutex mTrajectoryMutex;
+    std::vector<std::array<double, 6>> mTrajectory;
+    size_t mTrajectoryIndex = 0;
+    bool mHasTrajectory = false;
 };
 

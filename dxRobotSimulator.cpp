@@ -247,6 +247,49 @@ std::vector<double> dxRobotSimulator::getCtrl() const
     return out;
 }
 
+// Get a snapshot of the simulation state plus end-effector pose (site "tcp"/"pinch").
+dxRobotSimulator::RobotState dxRobotSimulator::getState() const
+{
+    RobotState state;
+    if (!mModel || !mData) return state;
+
+    state.qpos.assign(mData->qpos, mData->qpos + mModel->nq);
+    state.qvel.assign(mData->qvel, mData->qvel + mModel->nv);
+    state.ctrl.assign(mData->ctrl, mData->ctrl + mModel->nu);
+
+    int siteId = mj_name2id(mModel, mjOBJ_SITE, "tcp");
+    if (siteId < 0)
+        siteId = mj_name2id(mModel, mjOBJ_SITE, "pinch");
+    if (siteId >= 0)
+    {
+        const double* pos = mData->site_xpos + 3 * siteId;
+        const double* mat = mData->site_xmat + 9 * siteId;
+        state.eePos = { pos[0], pos[1], pos[2] };
+        mju_mat2Quat(state.eeQuat.data(), mat);
+    }
+
+    return state;
+}
+
+// Restore simulation state from a snapshot and recompute derived values.
+bool dxRobotSimulator::setState(const RobotState& state)
+{
+    if (!mModel || !mData) return false;
+    if (static_cast<int>(state.qpos.size()) != mModel->nq) return false;
+    if (static_cast<int>(state.qvel.size()) != mModel->nv) return false;
+    if (static_cast<int>(state.ctrl.size()) != mModel->nu) return false;
+
+    for (int i = 0; i < mModel->nq; ++i)
+        mData->qpos[i] = state.qpos[i];
+    for (int i = 0; i < mModel->nv; ++i)
+        mData->qvel[i] = state.qvel[i];
+    for (int i = 0; i < mModel->nu; ++i)
+        mData->ctrl[i] = state.ctrl[i];
+
+    mj_forward(mModel, mData);
+    return true;
+}
+
 // Set actuator control by index with bounds checks.
 bool dxRobotSimulator::setCtrl(int actuatorIndex, double value)
 {
