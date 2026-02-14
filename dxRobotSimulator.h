@@ -22,6 +22,8 @@ public:
     void run();
     void reset();
     void step(int steps = 1);
+    void printDetails() const;
+    void printCurrentPoseDegrees() const;
 
     int numJoints() const;
     int numActuators() const;
@@ -39,10 +41,14 @@ public:
     mjData* data() const { return m_data; }
 
 private:
+    bool applyPoseByName(const char* poseName);
+    void printPoseSummary(const char* poseName) const;
     void shutdown();
 
     std::string m_modelPath;
     bool m_createViewer = true;
+    bool m_poseApplied = false;
+    std::string m_poseAppliedName;
     std::unique_ptr<dxRobotViewerFactory> m_viewer;
     mjModel* m_model = nullptr;
     mjData* m_data = nullptr;
