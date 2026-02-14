@@ -1,0 +1,374 @@
+#include "dxKinMujo.h"
+
+#include <algorithm>
+#include <cmath>
+
+namespace
+{
+constexpr double kEps = 1e-9;
+
+double clamp_double(double v, double lo, double hi)
+{
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+void normalize_quat(double q[4])
+{
+    const double n = std::sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
+    if (n < kEps) return;
+    q[0] /= n;
+    q[1] /= n;
+    q[2] /= n;
+    q[3] /= n;
+}
+
+void quat_conjugate(const double q[4], double out[4])
+{
+    out[0] = q[0];
+    out[1] = -q[1];
+    out[2] = -q[2];
+    out[3] = -q[3];
+}
+
+void quat_multiply(const double a[4], const double b[4], double out[4])
+{
+    out[0] = a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3];
+    out[1] = a[0] * b[1] + a[1] * b[0] + a[2] * b[3] - a[3] * b[2];
+    out[2] = a[0] * b[2] - a[1] * b[3] + a[2] * b[0] + a[3] * b[1];
+    out[3] = a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0];
+}
+}
+
+dxKinMujo::dxKinMujo(mjModel* model, mjData* data)
+{
+    setModel(model, data);
+}
+
+dxKinMujo::~dxKinMujo()
+{
+    if (mDataScratch)
+    {
+        mj_deleteData(mDataScratch);
+        mDataScratch = nullptr;
+    }
+}
+
+bool dxKinMujo::setModel(mjModel* model, mjData* data)
+{
+    if (mDataScratch)
+    {
+        mj_deleteData(mDataScratch);
+        mDataScratch = nullptr;
+    }
+
+    mModel = model;
+    mDataRef = data;
+    mEESiteId = -1;
+    mEESiteName.clear();
+    mJointIds.clear();
+    mQposIndices.clear();
+    mDofIndices.clear();
+
+    if (!mModel) return false;
+
+    buildIndices();
+    resolveEndEffectorSite();
+    return ensureScratchData() && (mEESiteId >= 0);
+}
+
+void dxKinMujo::setReferenceData(mjData* data)
+{
+    mDataRef = data;
+}
+
+bool dxKinMujo::setEndEffectorSite(const std::string& siteName)
+{
+    if (!mModel) return false;
+    const int id = mj_name2id(mModel, mjOBJ_SITE, siteName.c_str());
+    if (id < 0) return false;
+    mEESiteId = id;
+    mEESiteName = siteName;
+    return true;
+}
+
+int dxKinMujo::getDoF() const
+{
+    return static_cast<int>(mQposIndices.size());
+}
+
+bool dxKinMujo::getFK(const std::vector<double>& qpos, PoseResult& out)
+{
+    if (!mModel) return false;
+    if (!ensureScratchData()) return false;
+    if (mEESiteId < 0) return false;
+
+    mj_resetData(mModel, mDataScratch);
+    if (!applyQpos(qpos, mDataScratch)) return false;
+
+    mj_forward(mModel, mDataScratch);
+    if (!computePoseFromData(mDataScratch, out)) return false;
+
+    std::get<2>(out) = qpos;
+    return true;
+}
+
+bool dxKinMujo::getFKCurrent(PoseResult& out) const
+{
+    if (!mModel) return false;
+    if (mEESiteId < 0) return false;
+
+    mjData* data = mDataRef ? mDataRef : mDataScratch;
+    if (!data) return false;
+
+    mj_forward(mModel, data);
+    if (!computePoseFromData(data, out)) return false;
+
+    std::get<2>(out) = extractDofQpos(data);
+    return true;
+}
+
+bool dxKinMujo::getIK(const std::vector<double>& seed,
+                      const std::vector<double>& targetPosQuat,
+                      std::vector<double>& solution,
+                      int maxIters,
+                      double posTol,
+                      double oriTol,
+                      double damping)
+{
+    if (!mModel) return false;
+    if (!ensureScratchData()) return false;
+    if (mEESiteId < 0) return false;
+    if (targetPosQuat.size() != 7) return false;
+
+    const int dofCount = static_cast<int>(mQposIndices.size());
+    if (seed.size() != static_cast<size_t>(mModel->nq) &&
+        seed.size() != static_cast<size_t>(dofCount))
+        return false;
+
+    mj_resetData(mModel, mDataScratch);
+    if (!applyQpos(seed, mDataScratch)) return false;
+
+    solution = seed;
+
+    const double targetPos[3] = { targetPosQuat[0], targetPosQuat[1], targetPosQuat[2] };
+    double targetQuat[4] = { targetPosQuat[3], targetPosQuat[4], targetPosQuat[5], targetPosQuat[6] };
+    normalize_quat(targetQuat);
+
+    std::vector<mjtNum> jacp(3 * mModel->nv, 0.0);
+    std::vector<mjtNum> jacr(3 * mModel->nv, 0.0);
+
+    for (int iter = 0; iter < maxIters; ++iter)
+    {
+        mj_forward(mModel, mDataScratch);
+
+        const double* pos = mDataScratch->site_xpos + 3 * mEESiteId;
+        const double* mat = mDataScratch->site_xmat + 9 * mEESiteId;
+
+        double currQuat[4] = { 1.0, 0.0, 0.0, 0.0 };
+        mju_mat2Quat(currQuat, mat);
+        normalize_quat(currQuat);
+
+        double posErr[3] = {
+            targetPos[0] - pos[0],
+            targetPos[1] - pos[1],
+            targetPos[2] - pos[2]
+        };
+
+        double conjCurr[4];
+        quat_conjugate(currQuat, conjCurr);
+        double qErr[4];
+        quat_multiply(targetQuat, conjCurr, qErr);
+        normalize_quat(qErr);
+        if (qErr[0] < 0.0)
+        {
+            qErr[0] = -qErr[0];
+            qErr[1] = -qErr[1];
+            qErr[2] = -qErr[2];
+            qErr[3] = -qErr[3];
+        }
+
+        double angErr[3];
+        const double sinHalf = std::sqrt(std::max(0.0, 1.0 - qErr[0] * qErr[0]));
+        if (sinHalf < 1e-8)
+        {
+            angErr[0] = 2.0 * qErr[1];
+            angErr[1] = 2.0 * qErr[2];
+            angErr[2] = 2.0 * qErr[3];
+        }
+        else
+        {
+            const double angle = 2.0 * std::acos(clamp_double(qErr[0], -1.0, 1.0));
+            angErr[0] = (qErr[1] / sinHalf) * angle;
+            angErr[1] = (qErr[2] / sinHalf) * angle;
+            angErr[2] = (qErr[3] / sinHalf) * angle;
+        }
+
+        const double posNorm = std::sqrt(posErr[0] * posErr[0] +
+                                         posErr[1] * posErr[1] +
+                                         posErr[2] * posErr[2]);
+        const double angNorm = std::sqrt(angErr[0] * angErr[0] +
+                                         angErr[1] * angErr[1] +
+                                         angErr[2] * angErr[2]);
+
+        if (posNorm < posTol && angNorm < oriTol)
+        {
+            if (seed.size() == static_cast<size_t>(mModel->nq))
+                solution.assign(mDataScratch->qpos, mDataScratch->qpos + mModel->nq);
+            else
+                solution = extractDofQpos(mDataScratch);
+            return true;
+        }
+
+        mj_jacSite(mModel, mDataScratch, jacp.data(), jacr.data(), mEESiteId);
+
+        Eigen::MatrixXd J(6, dofCount);
+        for (int i = 0; i < dofCount; ++i)
+        {
+            const int didx = mDofIndices[i];
+            J(0, i) = jacp[0 * mModel->nv + didx];
+            J(1, i) = jacp[1 * mModel->nv + didx];
+            J(2, i) = jacp[2 * mModel->nv + didx];
+            J(3, i) = jacr[0 * mModel->nv + didx];
+            J(4, i) = jacr[1 * mModel->nv + didx];
+            J(5, i) = jacr[2 * mModel->nv + didx];
+        }
+
+        Eigen::Matrix<double, 6, 1> err;
+        err << posErr[0], posErr[1], posErr[2], angErr[0], angErr[1], angErr[2];
+
+        Eigen::Matrix<double, 6, 6> JJt = J * J.transpose();
+        JJt += (damping * damping) * Eigen::Matrix<double, 6, 6>::Identity();
+
+        Eigen::Matrix<double, 6, 1> y = JJt.ldlt().solve(err);
+        Eigen::VectorXd dq = J.transpose() * y;
+
+        for (int i = 0; i < dofCount; ++i)
+        {
+            const int qadr = mQposIndices[i];
+            mDataScratch->qpos[qadr] += dq[i];
+
+            const int jid = mJointIds[i];
+            if (mModel->jnt_limited[jid])
+            {
+                const double lo = mModel->jnt_range[2 * jid];
+                const double hi = mModel->jnt_range[2 * jid + 1];
+                mDataScratch->qpos[qadr] = clamp_double(mDataScratch->qpos[qadr], lo, hi);
+            }
+        }
+    }
+
+    if (seed.size() == static_cast<size_t>(mModel->nq))
+        solution.assign(mDataScratch->qpos, mDataScratch->qpos + mModel->nq);
+    else
+        solution = extractDofQpos(mDataScratch);
+    return false;
+}
+
+bool dxKinMujo::resolveEndEffectorSite()
+{
+    if (!mModel) return false;
+
+    const char* candidates[] = { "pinch", "tcp", "tool0" };
+    for (const char* name : candidates)
+    {
+        const int id = mj_name2id(mModel, mjOBJ_SITE, name);
+        if (id >= 0)
+        {
+            mEESiteId = id;
+            mEESiteName = name;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool dxKinMujo::ensureScratchData()
+{
+    if (!mModel) return false;
+    if (!mDataScratch)
+        mDataScratch = mj_makeData(mModel);
+    return mDataScratch != nullptr;
+}
+
+void dxKinMujo::buildIndices()
+{
+    if (!mModel) return;
+    for (int jid = 0; jid < mModel->njnt; ++jid)
+    {
+        const int type = mModel->jnt_type[jid];
+        if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
+            continue;
+
+        const int qposAdr = mModel->jnt_qposadr[jid];
+        const int dofAdr = mModel->jnt_dofadr[jid];
+        if (qposAdr < 0 || qposAdr >= mModel->nq) continue;
+        if (dofAdr < 0 || dofAdr >= mModel->nv) continue;
+
+        mJointIds.push_back(jid);
+        mQposIndices.push_back(qposAdr);
+        mDofIndices.push_back(dofAdr);
+    }
+}
+
+bool dxKinMujo::applyQpos(const std::vector<double>& qpos, mjData* data) const
+{
+    if (!mModel || !data) return false;
+    if (qpos.size() == static_cast<size_t>(mModel->nq))
+    {
+        for (int i = 0; i < mModel->nq; ++i)
+            data->qpos[i] = qpos[i];
+        return true;
+    }
+
+    if (qpos.size() == mQposIndices.size())
+    {
+        for (size_t i = 0; i < mQposIndices.size(); ++i)
+            data->qpos[mQposIndices[i]] = qpos[i];
+        return true;
+    }
+
+    return false;
+}
+
+std::vector<double> dxKinMujo::extractDofQpos(const mjData* data) const
+{
+    std::vector<double> out;
+    if (!data) return out;
+    out.reserve(mQposIndices.size());
+    for (int idx : mQposIndices)
+        out.push_back(data->qpos[idx]);
+    return out;
+}
+
+bool dxKinMujo::computePoseFromData(const mjData* data, PoseResult& out) const
+{
+    if (!data || mEESiteId < 0) return false;
+    const double* pos = data->site_xpos + 3 * mEESiteId;
+    const double* mat = data->site_xmat + 9 * mEESiteId;
+
+    vpHomogeneousMatrix pose;
+    pose[0][0] = mat[0]; pose[0][1] = mat[1]; pose[0][2] = mat[2]; pose[0][3] = pos[0];
+    pose[1][0] = mat[3]; pose[1][1] = mat[4]; pose[1][2] = mat[5]; pose[1][3] = pos[1];
+    pose[2][0] = mat[6]; pose[2][1] = mat[7]; pose[2][2] = mat[8]; pose[2][3] = pos[2];
+    pose[3][0] = 0.0;    pose[3][1] = 0.0;    pose[3][2] = 0.0;    pose[3][3] = 1.0;
+
+    Eigen::Matrix4f eigenPose = Eigen::Matrix4f::Identity();
+    eigenPose(0, 0) = static_cast<float>(mat[0]);
+    eigenPose(0, 1) = static_cast<float>(mat[1]);
+    eigenPose(0, 2) = static_cast<float>(mat[2]);
+    eigenPose(1, 0) = static_cast<float>(mat[3]);
+    eigenPose(1, 1) = static_cast<float>(mat[4]);
+    eigenPose(1, 2) = static_cast<float>(mat[5]);
+    eigenPose(2, 0) = static_cast<float>(mat[6]);
+    eigenPose(2, 1) = static_cast<float>(mat[7]);
+    eigenPose(2, 2) = static_cast<float>(mat[8]);
+    eigenPose(0, 3) = static_cast<float>(pos[0]);
+    eigenPose(1, 3) = static_cast<float>(pos[1]);
+    eigenPose(2, 3) = static_cast<float>(pos[2]);
+
+    std::get<0>(out) = pose;
+    std::get<1>(out) = eigenPose;
+    return true;
+}

@@ -8,6 +8,8 @@ int main()
     if (!app.init())
         return -1;
 
+    app.testKinematics();
+
     app.test();
     app.run(10);
     return 0;

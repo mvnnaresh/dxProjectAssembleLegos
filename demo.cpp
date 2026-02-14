@@ -1,7 +1,10 @@
 #include "demo.h"
 
+#include <iomanip>
 #include <iostream>
 #include <thread>
+
+#include "dxKinMujo.h"
 
 demo::demo(const std::string& modelPath, bool createViewer)
     : mSim(std::make_shared<dxRobotSimulator>(modelPath, createViewer))
@@ -110,4 +113,52 @@ void demo::test()
             std::this_thread::sleep_for(latency);
         }
     }).detach();
+}
+
+void demo::testKinematics()
+{
+    if (!mSim || !mSim->model() || !mSim->data())
+    {
+        std::cout << "[testKinematics] simulator not initialized." << std::endl;
+        return;
+    }
+
+    dxKinMujo kin(mSim->model(), mSim->data());
+
+    dxKinMujo::PoseResult fkResult;
+    const std::vector<double> qpos = mSim->getQpos();
+    if (!kin.getFK(qpos, fkResult))
+    {
+        std::cout << "[testKinematics] FK failed." << std::endl;
+        return;
+    }
+
+    const Eigen::Matrix4f& pose = std::get<1>(fkResult);
+    const std::array<double, 3> pos = {
+        static_cast<double>(pose(0, 3)),
+        static_cast<double>(pose(1, 3)),
+        static_cast<double>(pose(2, 3))
+    };
+
+    double mat[9] = {
+        static_cast<double>(pose(0, 0)), static_cast<double>(pose(0, 1)), static_cast<double>(pose(0, 2)),
+        static_cast<double>(pose(1, 0)), static_cast<double>(pose(1, 1)), static_cast<double>(pose(1, 2)),
+        static_cast<double>(pose(2, 0)), static_cast<double>(pose(2, 1)), static_cast<double>(pose(2, 2))
+    };
+    double quat[4] = { 1.0, 0.0, 0.0, 0.0 };
+    mju_mat2Quat(quat, mat);
+
+    std::vector<double> target = {
+        pos[0], pos[1], pos[2],
+        quat[0], quat[1], quat[2], quat[3]
+    };
+
+    std::vector<double> solution;
+    const bool ikOk = kin.getIK(qpos, target, solution);
+
+    std::cout << std::fixed << std::setprecision(6);
+    std::cout << "[testKinematics] FK pos: "
+              << pos[0] << ", " << pos[1] << ", " << pos[2] << std::endl;
+    std::cout << "[testKinematics] IK " << (ikOk ? "converged" : "not converged")
+              << ", solution size: " << solution.size() << std::endl;
 }

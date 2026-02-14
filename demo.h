@@ -20,6 +20,7 @@ public:
     void run(int stepsPerFrame = 10);
     void moveRobotToJointPos(const std::vector<double>& jointsRad);
     void test();
+    void testKinematics();
 
     dxRobotViewerFactory* viewer() const { return mSim ? mSim->viewer() : nullptr; }
 
