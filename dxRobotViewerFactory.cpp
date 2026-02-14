@@ -7,12 +7,12 @@
 #include <GLFW/glfw3.h>
 
 dxRobotViewerFactory::dxRobotViewerFactory(const std::string& modelPath)
-    : m_modelPath(modelPath)
+    : mModelPath(modelPath)
 {
 }
 
 dxRobotViewerFactory::dxRobotViewerFactory(mjModel* model, mjData* data)
-    : m_modelPath(), m_model(model), m_data(data), m_ownsModelData(false)
+    : mModelPath(), mModel(model), mData(data), mOwnsModelData(false)
 {
 }
 
@@ -25,13 +25,13 @@ int dxRobotViewerFactory::run()
 {
     if (!initGLFW()) return 1;
     if (!createWindow()) return 2;
-    if (!m_model || !m_data)
+    if (!mModel || !mData)
     {
         if (!loadModel()) return 3;
     }
 
     initVisuals();
-    m_initialized = true;
+    mInitialized = true;
     mainLoop();
     shutdown();
     return 0;
@@ -39,27 +39,27 @@ int dxRobotViewerFactory::run()
 
 bool dxRobotViewerFactory::init()
 {
-    if (m_initialized) return true;
-    if (!m_model || !m_data) return false;
+    if (mInitialized) return true;
+    if (!mModel || !mData) return false;
     if (!initGLFW()) return false;
     if (!createWindow()) return false;
     initVisuals();
-    m_initialized = true;
+    mInitialized = true;
     return true;
 }
 
 void dxRobotViewerFactory::renderOnce()
 {
-    if (!m_initialized || !m_window) return;
+    if (!mInitialized || !mWindow) return;
     renderFrame();
-    glfwSwapBuffers(m_window);
+    glfwSwapBuffers(mWindow);
     glfwPollEvents();
 }
 
 bool dxRobotViewerFactory::shouldClose() const
 {
-    if (!m_window) return true;
-    return glfwWindowShouldClose(m_window) != 0;
+    if (!mWindow) return true;
+    return glfwWindowShouldClose(mWindow) != 0;
 }
 
 bool dxRobotViewerFactory::initGLFW()
@@ -78,23 +78,23 @@ bool dxRobotViewerFactory::createWindow()
     glfwWindowHint(GLFW_SAMPLES, 4);
     glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
 
-    m_window = glfwCreateWindow(m_width, m_height, "DexMan Viewer", nullptr, nullptr);
-    if (!m_window)
+    mWindow = glfwCreateWindow(mWidth, mHeight, "DexMan Viewer", nullptr, nullptr);
+    if (!mWindow)
     {
         std::fprintf(stderr, "Failed to create GLFW window.\n");
         glfwTerminate();
         return false;
     }
 
-    glfwMakeContextCurrent(m_window);
+    glfwMakeContextCurrent(mWindow);
     glfwSwapInterval(1);
 
-    glfwSetWindowUserPointer(m_window, this);
+    glfwSetWindowUserPointer(mWindow, this);
 
-    glfwSetKeyCallback(m_window, &dxRobotViewerFactory::keyCallback);
-    glfwSetMouseButtonCallback(m_window, &dxRobotViewerFactory::mouseButtonCallback);
-    glfwSetCursorPosCallback(m_window, &dxRobotViewerFactory::cursorPosCallback);
-    glfwSetScrollCallback(m_window, &dxRobotViewerFactory::scrollCallback);
+    glfwSetKeyCallback(mWindow, &dxRobotViewerFactory::keyCallback);
+    glfwSetMouseButtonCallback(mWindow, &dxRobotViewerFactory::mouseButtonCallback);
+    glfwSetCursorPosCallback(mWindow, &dxRobotViewerFactory::cursorPosCallback);
+    glfwSetScrollCallback(mWindow, &dxRobotViewerFactory::scrollCallback);
 
     return true;
 }
@@ -102,69 +102,69 @@ bool dxRobotViewerFactory::createWindow()
 bool dxRobotViewerFactory::loadModel()
 {
     char err[1024] = { 0 };
-    m_model = mj_loadXML(m_modelPath.c_str(), nullptr, err, sizeof(err));
-    if (!m_model)
+    mModel = mj_loadXML(mModelPath.c_str(), nullptr, err, sizeof(err));
+    if (!mModel)
     {
         std::fprintf(stderr, "mj_loadXML failed for '%s'\nError: %s\n",
-                     m_modelPath.c_str(), err);
+                     mModelPath.c_str(), err);
         return false;
     }
 
-    m_data = mj_makeData(m_model);
-    if (!m_data)
+    mData = mj_makeData(mModel);
+    if (!mData)
     {
         std::fprintf(stderr, "mj_makeData failed.\n");
         return false;
     }
 
     std::printf("MuJoCo version: %s\n", mj_versionString());
-    std::printf("Loaded model: %s\n", m_modelPath.c_str());
+    std::printf("Loaded model: %s\n", mModelPath.c_str());
     return true;
 }
 
 void dxRobotViewerFactory::initVisuals()
 {
-    m_cam = new (std::nothrow) mjvCamera;
-    m_opt = new (std::nothrow) mjvOption;
-    m_scn = new (std::nothrow) mjvScene;
-    m_con = new (std::nothrow) mjrContext;
+    mCam = new (std::nothrow) mjvCamera;
+    mOpt = new (std::nothrow) mjvOption;
+    mScn = new (std::nothrow) mjvScene;
+    mCon = new (std::nothrow) mjrContext;
 
-    if (!m_cam || !m_opt || !m_scn || !m_con)
+    if (!mCam || !mOpt || !mScn || !mCon)
     {
         std::fprintf(stderr, "Failed to allocate visualisation structs.\n");
         return;
     }
 
-    mjv_defaultCamera(m_cam);
-    mjv_defaultOption(m_opt);
-    mjv_defaultScene(m_scn);
-    mjr_defaultContext(m_con);
+    mjv_defaultCamera(mCam);
+    mjv_defaultOption(mOpt);
+    mjv_defaultScene(mScn);
+    mjr_defaultContext(mCon);
 
-    m_opt->frame = mjFRAME_WORLD;
+    mOpt->frame = mjFRAME_WORLD;
 
-    mjv_makeScene(m_model, m_scn, 4000);
-    mjr_makeContext(m_model, m_con, mjFONTSCALE_150);
+    mjv_makeScene(mModel, mScn, 4000);
+    mjr_makeContext(mModel, mCon, mjFONTSCALE_150);
 
     // Reasonable default camera
-    m_cam->azimuth = 90.0;
-    m_cam->elevation = -20.0;
-    m_cam->distance = 3.0;
-    m_cam->lookat[0] = 0.0;
-    m_cam->lookat[1] = 0.0;
-    m_cam->lookat[2] = 0.5;
+    mCam->azimuth = 90.0;
+    mCam->elevation = -20.0;
+    mCam->distance = 3.0;
+    mCam->lookat[0] = 0.0;
+    mCam->lookat[1] = 0.0;
+    mCam->lookat[2] = 0.5;
 
-    mj_forward(m_model, m_data);
+    mj_forward(mModel, mData);
 }
 
 void dxRobotViewerFactory::mainLoop()
 {
-    if (!m_window || !m_model || !m_data || !m_cam || !m_opt || !m_scn || !m_con)
+    if (!mWindow || !mModel || !mData || !mCam || !mOpt || !mScn || !mCon)
         return;
 
     double lastWall = glfwGetTime();
     double simAccum = 0.0;
 
-    while (!glfwWindowShouldClose(m_window))
+    while (!glfwWindowShouldClose(mWindow))
     {
         const double now = glfwGetTime();
         double dtWall = now - lastWall;
@@ -173,24 +173,24 @@ void dxRobotViewerFactory::mainLoop()
         if (dtWall > 0.1) dtWall = 0.1;
         simAccum += dtWall;
 
-        if (!m_paused)
+        if (!mPaused)
         {
-            const double dtSim = m_model->opt.timestep;
+            const double dtSim = mModel->opt.timestep;
             while (simAccum >= dtSim)
             {
-                mj_step(m_model, m_data);
+                mj_step(mModel, mData);
                 simAccum -= dtSim;
             }
         }
-        else if (m_stepOnce)
+        else if (mStepOnce)
         {
-            mj_step(m_model, m_data);
-            m_stepOnce = false;
+            mj_step(mModel, mData);
+            mStepOnce = false;
         }
 
         renderFrame();
 
-        glfwSwapBuffers(m_window);
+        glfwSwapBuffers(mWindow);
         glfwPollEvents();
     }
 }
@@ -198,48 +198,48 @@ void dxRobotViewerFactory::mainLoop()
 void dxRobotViewerFactory::renderFrame()
 {
     int w = 0, h = 0;
-    glfwGetFramebufferSize(m_window, &w, &h);
+    glfwGetFramebufferSize(mWindow, &w, &h);
     mjrRect viewport = { 0, 0, w, h };
 
-    mjv_updateScene(m_model, m_data, m_opt, nullptr, m_cam, mjCAT_ALL, m_scn);
-    mjr_render(viewport, m_scn, m_con);
+    mjv_updateScene(mModel, mData, mOpt, nullptr, mCam, mjCAT_ALL, mScn);
+    mjr_render(viewport, mScn, mCon);
 }
 
 void dxRobotViewerFactory::shutdown()
 {
-    if (m_shutdownDone) return;
-    m_shutdownDone = true;
+    if (mShutdownDone) return;
+    mShutdownDone = true;
 
-    if (m_con && m_model) mjr_freeContext(m_con);
-    if (m_scn && m_model) mjv_freeScene(m_scn);
+    if (mCon && mModel) mjr_freeContext(mCon);
+    if (mScn && mModel) mjv_freeScene(mScn);
 
-    delete m_con;
-    m_con = nullptr;
-    delete m_scn;
-    m_scn = nullptr;
-    delete m_opt;
-    m_opt = nullptr;
-    delete m_cam;
-    m_cam = nullptr;
+    delete mCon;
+    mCon = nullptr;
+    delete mScn;
+    mScn = nullptr;
+    delete mOpt;
+    mOpt = nullptr;
+    delete mCam;
+    mCam = nullptr;
 
-    if (m_ownsModelData)
+    if (mOwnsModelData)
     {
-        if (m_data)
+        if (mData)
         {
-            mj_deleteData(m_data);
-            m_data = nullptr;
+            mj_deleteData(mData);
+            mData = nullptr;
         }
-        if (m_model)
+        if (mModel)
         {
-            mj_deleteModel(m_model);
-            m_model = nullptr;
+            mj_deleteModel(mModel);
+            mModel = nullptr;
         }
     }
 
-    if (m_window)
+    if (mWindow)
     {
-        glfwDestroyWindow(m_window);
-        m_window = nullptr;
+        glfwDestroyWindow(mWindow);
+        mWindow = nullptr;
     }
 
     glfwTerminate();
@@ -268,13 +268,13 @@ void dxRobotViewerFactory::keyCallback(GLFWwindow* w, int key, int, int action, 
     }
 
     // Handy dev controls
-    if (key == GLFW_KEY_SPACE) s->m_paused = !s->m_paused;
-    if (key == GLFW_KEY_PERIOD && s->m_paused) s->m_stepOnce = true;
+    if (key == GLFW_KEY_SPACE) s->mPaused = !s->mPaused;
+    if (key == GLFW_KEY_PERIOD && s->mPaused) s->mStepOnce = true;
 
-    if (key == GLFW_KEY_R && s->m_model && s->m_data)
+    if (key == GLFW_KEY_R && s->mModel && s->mData)
     {
-        mj_resetData(s->m_model, s->m_data);
-        mj_forward(s->m_model, s->m_data);
+        mj_resetData(s->mModel, s->mData);
+        mj_forward(s->mModel, s->mData);
     }
 }
 
@@ -283,24 +283,24 @@ void dxRobotViewerFactory::mouseButtonCallback(GLFWwindow* w, int button, int ac
     dxRobotViewerFactory* s = self(w);
     if (!s) return;
 
-    if (button == GLFW_MOUSE_BUTTON_LEFT)   s->m_btnLeft = (action == GLFW_PRESS);
-    if (button == GLFW_MOUSE_BUTTON_MIDDLE) s->m_btnMiddle = (action == GLFW_PRESS);
-    if (button == GLFW_MOUSE_BUTTON_RIGHT)  s->m_btnRight = (action == GLFW_PRESS);
+    if (button == GLFW_MOUSE_BUTTON_LEFT)   s->mBtnLeft = (action == GLFW_PRESS);
+    if (button == GLFW_MOUSE_BUTTON_MIDDLE) s->mBtnMiddle = (action == GLFW_PRESS);
+    if (button == GLFW_MOUSE_BUTTON_RIGHT)  s->mBtnRight = (action == GLFW_PRESS);
 
-    glfwGetCursorPos(w, &s->m_lastX, &s->m_lastY);
+    glfwGetCursorPos(w, &s->mLastX, &s->mLastY);
 }
 
 void dxRobotViewerFactory::cursorPosCallback(GLFWwindow* w, double xpos, double ypos)
 {
     dxRobotViewerFactory* s = self(w);
-    if (!s || !s->m_model || !s->m_scn || !s->m_cam) return;
+    if (!s || !s->mModel || !s->mScn || !s->mCam) return;
 
-    const double dx = xpos - s->m_lastX;
-    const double dy = ypos - s->m_lastY;
-    s->m_lastX = xpos;
-    s->m_lastY = ypos;
+    const double dx = xpos - s->mLastX;
+    const double dy = ypos - s->mLastY;
+    s->mLastX = xpos;
+    s->mLastY = ypos;
 
-    if (!s->m_btnLeft && !s->m_btnMiddle && !s->m_btnRight) return;
+    if (!s->mBtnLeft && !s->mBtnMiddle && !s->mBtnRight) return;
 
     int width = 0;
     int height = 0;
@@ -312,25 +312,27 @@ void dxRobotViewerFactory::cursorPosCallback(GLFWwindow* w, double xpos, double 
         (glfwGetKey(w, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
 
     mjtMouse act = mjMOUSE_NONE;
-    if (s->m_btnRight)
+    if (s->mBtnRight)
         act = shift ? mjMOUSE_MOVE_V : mjMOUSE_MOVE_H;
-    else if (s->m_btnMiddle)
+    else if (s->mBtnMiddle)
         act = mjMOUSE_ZOOM;
-    else if (s->m_btnLeft)
+    else if (s->mBtnLeft)
         act = shift ? mjMOUSE_ROTATE_V : mjMOUSE_ROTATE_H;
 
-    mjv_moveCamera(s->m_model, act,
+    mjv_moveCamera(s->mModel, act,
                    (mjtNum)(dx / static_cast<double>(height)),
                    (mjtNum)(dy / static_cast<double>(height)),
-                   s->m_scn, s->m_cam);
+                   s->mScn, s->mCam);
 }
 
 void dxRobotViewerFactory::scrollCallback(GLFWwindow* w, double, double yoffset)
 {
     dxRobotViewerFactory* s = self(w);
-    if (!s || !s->m_model || !s->m_scn || !s->m_cam) return;
+    if (!s || !s->mModel || !s->mScn || !s->mCam) return;
 
     // Scroll zoom
     const mjtNum zoom = (mjtNum)(-0.05 * yoffset);
-    mjv_moveCamera(s->m_model, mjMOUSE_ZOOM, 0.0, zoom, s->m_scn, s->m_cam);
+    mjv_moveCamera(s->mModel, mjMOUSE_ZOOM, 0.0, zoom, s->mScn, s->mCam);
 }
+
+

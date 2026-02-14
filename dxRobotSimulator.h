@@ -34,22 +34,24 @@ public:
 
     bool setCtrl(int actuatorIndex, double value);
     bool setCtrlByName(const std::string& actuatorName, double value);
+    void setCtrlTargets(const std::vector<double>& targets);
 
-    dxRobotViewerFactory* viewer() const { return m_viewer.get(); }
+    dxRobotViewerFactory* viewer() const { return mViewer.get(); }
 
-    mjModel* model() const { return m_model; }
-    mjData* data() const { return m_data; }
+    mjModel* model() const { return mModel; }
+    mjData* data() const { return mData; }
 
 private:
     bool applyPoseByName(const char* poseName);
     void printPoseSummary(const char* poseName) const;
     void shutdown();
 
-    std::string m_modelPath;
-    bool m_createViewer = true;
-    bool m_poseApplied = false;
-    std::string m_poseAppliedName;
-    std::unique_ptr<dxRobotViewerFactory> m_viewer;
-    mjModel* m_model = nullptr;
-    mjData* m_data = nullptr;
+    std::string mModelPath;
+    bool mCreateViewer = true;
+    bool mPoseApplied = false;
+    std::string mPoseAppliedName;
+    std::unique_ptr<dxRobotViewerFactory> mViewer;
+    mjModel* mModel = nullptr;
+    mjData* mData = nullptr;
 };
+

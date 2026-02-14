@@ -14,8 +14,8 @@ find_package(glfw3 CONFIG REQUIRED)
 add_executable(dxProjectAssembleLegos main.cpp
     dxRobotViewerFactory.cpp
     dxRobotViewerFactory.h
-    dxRobotPickAndPlace.cpp
-    dxRobotPickAndPlace.h
+    demo.cpp
+    demo.h
     dxRobotSimulator.cpp
     dxRobotSimulator.h)
 

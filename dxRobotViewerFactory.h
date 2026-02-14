@@ -48,31 +48,33 @@ private:
     static dxRobotViewerFactory* self(GLFWwindow* w);
 
 private:
-    std::string m_modelPath;
+    std::string mModelPath;
 
-    GLFWwindow* m_window = nullptr;
-    int m_width = 1200;
-    int m_height = 900;
+    GLFWwindow* mWindow = nullptr;
+    int mWidth = 1200;
+    int mHeight = 900;
 
-    mjModel* m_model = nullptr;
-    mjData*  m_data = nullptr;
+    mjModel* mModel = nullptr;
+    mjData*  mData = nullptr;
 
-    mjvCamera*  m_cam = nullptr;
-    mjvOption*  m_opt = nullptr;
-    mjvScene*   m_scn = nullptr;
-    mjrContext* m_con = nullptr;
+    mjvCamera*  mCam = nullptr;
+    mjvOption*  mOpt = nullptr;
+    mjvScene*   mScn = nullptr;
+    mjrContext* mCon = nullptr;
 
-    bool m_paused = false;
-    bool m_stepOnce = false;
+    bool mPaused = false;
+    bool mStepOnce = false;
 
-    bool m_btnLeft = false;
-    bool m_btnMiddle = false;
-    bool m_btnRight = false;
-    double m_lastX = 0.0;
-    double m_lastY = 0.0;
+    bool mBtnLeft = false;
+    bool mBtnMiddle = false;
+    bool mBtnRight = false;
+    double mLastX = 0.0;
+    double mLastY = 0.0;
 
-    bool m_ownsModelData = true;
-    bool m_initialized = false;
+    bool mOwnsModelData = true;
+    bool mInitialized = false;
 
-    bool m_shutdownDone = false;
+    bool mShutdownDone = false;
 };
+
+

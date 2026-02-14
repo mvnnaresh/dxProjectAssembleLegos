@@ -37,7 +37,7 @@ static void zero_qvel(mjModel* model, mjData* data)
 
 // Store config for model path and optional viewer creation.
 dxRobotSimulator::dxRobotSimulator(const std::string& modelPath, bool createViewer)
-    : m_modelPath(modelPath), m_createViewer(createViewer)
+    : mModelPath(modelPath), mCreateViewer(createViewer)
 {
 }
 
@@ -54,16 +54,16 @@ bool dxRobotSimulator::loadModel()
 
     // Load the XML model and allocate data; report MuJoCo loader errors.
     char err[1024] = { 0 };
-    m_model = mj_loadXML(m_modelPath.c_str(), nullptr, err, sizeof(err));
-    if (!m_model)
+    mModel = mj_loadXML(mModelPath.c_str(), nullptr, err, sizeof(err));
+    if (!mModel)
     {
         std::fprintf(stderr, "dxRobotSimulator: mj_loadXML failed for '%s'\nError: %s\n",
-                     m_modelPath.c_str(), err);
+                     mModelPath.c_str(), err);
         return false;
     }
 
-    m_data = mj_makeData(m_model);
-    if (!m_data)
+    mData = mj_makeData(mModel);
+    if (!mData)
     {
         std::fprintf(stderr, "dxRobotSimulator: mj_makeData failed.\n");
         shutdown();
@@ -71,7 +71,7 @@ bool dxRobotSimulator::loadModel()
     }
 
     // Ensure derived quantities (xpos, xmat, etc.) are consistent.
-    mj_forward(m_model, m_data);
+    mj_forward(mModel, mData);
     return true;
 }
 
@@ -81,22 +81,22 @@ bool dxRobotSimulator::init()
     if (!loadModel()) return false;
 
     // Prefer a named HOME_POS pose when the model provides one (UR10e 90-90 start).
-    m_poseApplied = false;
-    m_poseAppliedName.clear();
+    mPoseApplied = false;
+    mPoseAppliedName.clear();
     if (!applyPoseByName("HOME_POS"))
         applyPoseByName("home");
 
     // Avoid residual velocities before starting.
-    zero_qvel(m_model, m_data);
-    mj_forward(m_model, m_data);
+    zero_qvel(mModel, mData);
+    mj_forward(mModel, mData);
 
-    if (m_createViewer)
+    if (mCreateViewer)
     {
         // Viewer owns rendering state; keep it optional for headless runs.
-        m_viewer = std::make_unique<dxRobotViewerFactory>(m_model, m_data);
-        if (!m_viewer->init())
+        mViewer = std::make_unique<dxRobotViewerFactory>(mModel, mData);
+        if (!mViewer->init())
         {
-            m_viewer.reset();
+            mViewer.reset();
             return false;
         }
     }
@@ -107,48 +107,48 @@ bool dxRobotSimulator::init()
 // Run a minimal step/render loop until the viewer is closed.
 void dxRobotSimulator::run()
 {
-    if (!m_model || !m_data)
+    if (!mModel || !mData)
     {
         if (!init()) return;
     }
-    if (!m_viewer) return;
+    if (!mViewer) return;
 
     // Simple real-time loop: step simulation then render.
-    while (!m_viewer->shouldClose())
+    while (!mViewer->shouldClose())
     {
         step(1);
-        m_viewer->renderOnce();
+        mViewer->renderOnce();
     }
 }
 
 // Reset simulation state to model defaults and recompute derived state.
 void dxRobotSimulator::reset()
 {
-    if (!m_model || !m_data) return;
+    if (!mModel || !mData) return;
     // Reset to model defaults and recompute derived state.
-    mj_resetData(m_model, m_data);
-    mj_forward(m_model, m_data);
+    mj_resetData(mModel, mData);
+    mj_forward(mModel, mData);
 }
 
 // Advance the simulation by a fixed number of MuJoCo steps.
 void dxRobotSimulator::step(int steps)
 {
-    if (!m_model || !m_data) return;
+    if (!mModel || !mData) return;
     if (steps < 1) steps = 1;
     for (int i = 0; i < steps; ++i)
-        mj_step(m_model, m_data);
+        mj_step(mModel, mData);
 }
 
 // Print model and runtime details after initialization.
 void dxRobotSimulator::printDetails() const
 {
-    if (!m_model || !m_data)
+    if (!mModel || !mData)
     {
         std::printf("dxRobotSimulator: no model/data loaded.\n");
         return;
     }
 
-    const char* modelName = m_modelPath.c_str();
+    const char* modelName = mModelPath.c_str();
 
     int robotDof = 0;
     int gripperDof = 0;
@@ -168,16 +168,16 @@ void dxRobotSimulator::printDetails() const
     };
 
     for (int i = 0; i < 6; ++i)
-        if (mj_name2id(m_model, mjOBJ_JOINT, robotJoints[i]) >= 0)
+        if (mj_name2id(mModel, mjOBJ_JOINT, robotJoints[i]) >= 0)
             ++robotDof;
     for (int i = 0; i < 4; ++i)
-        if (mj_name2id(m_model, mjOBJ_JOINT, gripperJoints[i]) >= 0)
+        if (mj_name2id(mModel, mjOBJ_JOINT, gripperJoints[i]) >= 0)
             ++gripperDof;
 
     const char* toolName = "none";
-    if (mj_name2id(m_model, mjOBJ_BODY, "hande") >= 0)
+    if (mj_name2id(mModel, mjOBJ_BODY, "hande") >= 0)
         toolName = "Robotiq Hand-E";
-    else if (mj_name2id(m_model, mjOBJ_BODY, "gripper_base") >= 0)
+    else if (mj_name2id(mModel, mjOBJ_BODY, "gripper_base") >= 0)
         toolName = "Generic gripper";
 
     std::printf("=== Simulator Info ===\n");
@@ -187,23 +187,23 @@ void dxRobotSimulator::printDetails() const
     std::printf("    Robot    : %d\n", robotDof);
     std::printf("    Gripper  : %d\n", gripperDof);
     std::printf("  Totals\n");
-    std::printf("    Joints   : %d\n", m_model->njnt);
-    std::printf("    Cameras  : %d", m_model->ncam);
-    if (m_model->ncam > 0)
+    std::printf("    Joints   : %d\n", mModel->njnt);
+    std::printf("    Cameras  : %d", mModel->ncam);
+    if (mModel->ncam > 0)
     {
         std::printf(" (");
-        for (int i = 0; i < m_model->ncam; ++i)
+        for (int i = 0; i < mModel->ncam; ++i)
         {
-            const char* name = mj_id2name(m_model, mjOBJ_CAMERA, i);
+            const char* name = mj_id2name(mModel, mjOBJ_CAMERA, i);
             if (i > 0) std::printf(", ");
             std::printf("%s", name ? name : "unnamed");
         }
         std::printf(")");
     }
     std::printf("\n");
-    std::printf("  Viewer     : %s\n", m_viewer ? "enabled" : "disabled");
-    if (m_poseApplied)
-        std::printf("  Pose       : %s\n", m_poseAppliedName.c_str());
+    std::printf("  Viewer     : %s\n", mViewer ? "enabled" : "disabled");
+    if (mPoseApplied)
+        std::printf("  Pose       : %s\n", mPoseAppliedName.c_str());
     else
         std::printf("  Pose       : none\n");
 }
@@ -211,21 +211,21 @@ void dxRobotSimulator::printDetails() const
 // Return the joint count for the currently loaded model.
 int dxRobotSimulator::numJoints() const
 {
-    return m_model ? m_model->njnt : 0;
+    return mModel ? mModel->njnt : 0;
 }
 
 // Return the actuator count for the currently loaded model.
 int dxRobotSimulator::numActuators() const
 {
-    return m_model ? m_model->nu : 0;
+    return mModel ? mModel->nu : 0;
 }
 
 // Get a copy of generalized positions (qpos) from the current state.
 std::vector<double> dxRobotSimulator::getQpos() const
 {
     std::vector<double> out;
-    if (!m_model || !m_data) return out;
-    out.assign(m_data->qpos, m_data->qpos + m_model->nq);
+    if (!mModel || !mData) return out;
+    out.assign(mData->qpos, mData->qpos + mModel->nq);
     return out;
 }
 
@@ -233,8 +233,8 @@ std::vector<double> dxRobotSimulator::getQpos() const
 std::vector<double> dxRobotSimulator::getQvel() const
 {
     std::vector<double> out;
-    if (!m_model || !m_data) return out;
-    out.assign(m_data->qvel, m_data->qvel + m_model->nv);
+    if (!mModel || !mData) return out;
+    out.assign(mData->qvel, mData->qvel + mModel->nv);
     return out;
 }
 
@@ -242,61 +242,71 @@ std::vector<double> dxRobotSimulator::getQvel() const
 std::vector<double> dxRobotSimulator::getCtrl() const
 {
     std::vector<double> out;
-    if (!m_model || !m_data) return out;
-    out.assign(m_data->ctrl, m_data->ctrl + m_model->nu);
+    if (!mModel || !mData) return out;
+    out.assign(mData->ctrl, mData->ctrl + mModel->nu);
     return out;
 }
 
 // Set actuator control by index with bounds checks.
 bool dxRobotSimulator::setCtrl(int actuatorIndex, double value)
 {
-    if (!m_model || !m_data) return false;
-    if (actuatorIndex < 0 || actuatorIndex >= m_model->nu) return false;
-    m_data->ctrl[actuatorIndex] = value;
+    if (!mModel || !mData) return false;
+    if (actuatorIndex < 0 || actuatorIndex >= mModel->nu) return false;
+    mData->ctrl[actuatorIndex] = value;
     return true;
 }
 
 // Set actuator control by name; returns false if not found.
 bool dxRobotSimulator::setCtrlByName(const std::string& actuatorName, double value)
 {
-    if (!m_model || !m_data) return false;
-    const int id = mj_name2id(m_model, mjOBJ_ACTUATOR, actuatorName.c_str());
+    if (!mModel || !mData) return false;
+    const int id = mj_name2id(mModel, mjOBJ_ACTUATOR, actuatorName.c_str());
     if (id < 0) return false;
-    m_data->ctrl[id] = value;
+    mData->ctrl[id] = value;
     return true;
+}
+
+// Set actuator controls from a vector, applied in actuator index order.
+void dxRobotSimulator::setCtrlTargets(const std::vector<double>& targets)
+{
+    if (!mModel || !mData) return;
+    const int count = static_cast<int>(targets.size());
+    const int limit = (count < mModel->nu) ? count : mModel->nu;
+    for (int i = 0; i < limit; ++i)
+        mData->ctrl[i] = targets[i];
 }
 
 // Release viewer, data, and model in a safe order.
 void dxRobotSimulator::shutdown()
 {
-    if (m_viewer)
+    if (mViewer)
     {
         // Viewer may hold GL resources tied to the model/data.
-        m_viewer.reset();
+        mViewer.reset();
     }
 
-    if (m_data)
+    if (mData)
     {
         // Free MuJoCo data before deleting the model.
-        mj_deleteData(m_data);
-        m_data = nullptr;
+        mj_deleteData(mData);
+        mData = nullptr;
     }
-    if (m_model)
+    if (mModel)
     {
-        mj_deleteModel(m_model);
-        m_model = nullptr;
+        mj_deleteModel(mModel);
+        mModel = nullptr;
     }
 }
 
 // Apply a named pose saved in the model (e.g., HOME_POS = 90-90 joint start).
 bool dxRobotSimulator::applyPoseByName(const char* poseName)
 {
-    if (!m_model || !m_data || !poseName) return false;
-    const int poseId = mj_name2id(m_model, mjOBJ_KEY, poseName);
+    if (!mModel || !mData || !poseName) return false;
+    const int poseId = mj_name2id(mModel, mjOBJ_KEY, poseName);
     if (poseId < 0) return false;
-    mj_resetDataKeyframe(m_model, m_data, poseId);
-    m_poseApplied = true;
-    m_poseAppliedName = poseName;
+    mj_resetDataKeyframe(mModel, mData, poseId);
+    mPoseApplied = true;
+    mPoseAppliedName = poseName;
     printPoseSummary(poseName);
     return true;
 }
@@ -304,7 +314,7 @@ bool dxRobotSimulator::applyPoseByName(const char* poseName)
 // Print a concise joint-angle summary (degrees) after a pose change.
 void dxRobotSimulator::printPoseSummary(const char* poseName) const
 {
-    if (!m_model || !m_data) return;
+    if (!mModel || !mData) return;
     const char* jointNames[6] = {
         "shoulder_pan_joint",
         "shoulder_lift_joint",
@@ -327,11 +337,11 @@ void dxRobotSimulator::printPoseSummary(const char* poseName) const
     bool first = true;
     for (int i = 0; i < 6; ++i)
     {
-        const int jid = mj_name2id(m_model, mjOBJ_JOINT, jointNames[i]);
+        const int jid = mj_name2id(mModel, mjOBJ_JOINT, jointNames[i]);
         if (jid < 0) continue;
-        const int qposAdr = m_model->jnt_qposadr[jid];
-        if (qposAdr < 0 || qposAdr >= m_model->nq) continue;
-        const double deg = m_data->qpos[qposAdr] * 180.0 / 3.141592653589793;
+        const int qposAdr = mModel->jnt_qposadr[jid];
+        if (qposAdr < 0 || qposAdr >= mModel->nq) continue;
+        const double deg = mData->qpos[qposAdr] * 180.0 / 3.141592653589793;
         if (!first) std::printf(", ");
         std::printf("%.2f", deg);
         first = false;
@@ -342,7 +352,7 @@ void dxRobotSimulator::printPoseSummary(const char* poseName) const
 // Print the current 6-DOF arm pose in degrees.
 void dxRobotSimulator::printCurrentPoseDegrees() const
 {
-    if (!m_model || !m_data)
+    if (!mModel || !mData)
     {
         std::printf("  curr_q_pos (deg) = (unavailable)\n");
         return;
@@ -360,14 +370,15 @@ void dxRobotSimulator::printCurrentPoseDegrees() const
     bool first = true;
     for (int i = 0; i < 6; ++i)
     {
-        const int jid = mj_name2id(m_model, mjOBJ_JOINT, jointNames[i]);
+        const int jid = mj_name2id(mModel, mjOBJ_JOINT, jointNames[i]);
         if (jid < 0) continue;
-        const int qposAdr = m_model->jnt_qposadr[jid];
-        if (qposAdr < 0 || qposAdr >= m_model->nq) continue;
-        const double deg = m_data->qpos[qposAdr] * 180.0 / 3.141592653589793;
+        const int qposAdr = mModel->jnt_qposadr[jid];
+        if (qposAdr < 0 || qposAdr >= mModel->nq) continue;
+        const double deg = mData->qpos[qposAdr] * 180.0 / 3.141592653589793;
         if (!first) std::printf(", ");
         std::printf("%.2f", deg);
         first = false;
     }
     std::printf(")\n");
 }
+

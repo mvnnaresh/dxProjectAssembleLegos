@@ -1,25 +1,14 @@
-#include <cstddef>
-#include <cstdio>
-#include <fstream>
 #include <string>
-#include "dxRobotPickAndPlace.h"
-#include "dxRobotSimulator.h"
+#include "demo.h"
 
 int main()
 {
     const std::string modelPath = "models/ur10e_2f85_scene.xml";
-    dxRobotSimulator simulator(modelPath, true);
-    if (!simulator.init())
-        return 1;
-    dxRobotPickAndPlace pickAndPlace(&simulator);
+    demo app(modelPath, true);
+    if (!app.init())
+        return -1;
 
-    const int stepsPerFrame = 10;
-    while (simulator.viewer() && !simulator.viewer()->shouldClose())
-    {
-        pickAndPlace.update();
-        simulator.step(stepsPerFrame);
-        simulator.viewer()->renderOnce();
-    }
+    app.run(10);
     return 0;
 }
 /*
