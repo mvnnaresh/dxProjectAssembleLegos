@@ -1,16 +1,64 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
+#include <QDockWidget>
+#include <QPushButton>
+#include <QVBoxLayout>
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    setWindowTitle("DexMan Digital Twin + Viewer");
 
     mViewer = new dxMuJoCoWindow();
     QWidget* container = QWidget::createWindowContainer(mViewer, this);
     setCentralWidget(container);
-    mViewer->loadModel("models/ur10e_2f85_scene.xml");
+
+    QDockWidget* dock = new QDockWidget("Controls", this);
+    QWidget* dockWidget = new QWidget(dock);
+    QVBoxLayout* dockLayout = new QVBoxLayout(dockWidget);
+    QPushButton* initButton = new QPushButton("Init", dockWidget);
+    QPushButton* testButton = new QPushButton("Test Planner", dockWidget);
+    dockLayout->addWidget(initButton);
+    dockLayout->addWidget(testButton);
+    dockLayout->addStretch(1);
+    dockWidget->setLayout(dockLayout);
+    dock->setWidget(dockWidget);
+    addDockWidget(Qt::LeftDockWidgetArea, dock);
+
+    mSimTimer = new QTimer(this);
+    mSimTimer->setInterval(10);
+    connect(mSimTimer, &QTimer::timeout, this, [this]()
+    {
+        if (mDemo)
+        {
+            mDemo->step(1);
+            if (mViewer) mViewer->update();
+        }
+    });
+
+    connect(initButton, &QPushButton::clicked, this, [this]()
+    {
+        if (!mDemo)
+            mDemo = std::make_unique<demo>(mModelPath, false);
+        if (!mDemo->init())
+            return;
+
+        if (mViewer)
+            mViewer->setModel(mDemo->model(), mDemo->data(), false);
+
+        if (mSimTimer && !mSimTimer->isActive())
+            mSimTimer->start();
+    });
+
+    connect(testButton, &QPushButton::clicked, this, [this]()
+    {
+        if (mDemo)
+            mDemo->testPlanner();
+    });
+
 }
 
 MainWindow::~MainWindow()

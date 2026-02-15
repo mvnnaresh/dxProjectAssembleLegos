@@ -24,6 +24,8 @@ public:
     void testPlanner();
 
     dxRobotViewerFactory* viewer() const { return mSim ? mSim->viewer() : nullptr; }
+    mjModel* model() const { return mSim ? mSim->model() : nullptr; }
+    mjData* data() const { return mSim ? mSim->data() : nullptr; }
 
 private:
     std::shared_ptr<dxRobotSimulator> mSim;

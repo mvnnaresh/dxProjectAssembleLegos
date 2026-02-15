@@ -168,10 +168,6 @@ void demo::testPlanner()
 {
     std::thread([this]()
     {
-        std::cout << "Press Enter to start joint-space planning..." << std::endl;
-        std::string line;
-        std::getline(std::cin, line);
-
         if (!mSim || !mSim->model() || !mSim->data())
         {
             std::cout << "[testPlanner] simulator not initialized." << std::endl;
