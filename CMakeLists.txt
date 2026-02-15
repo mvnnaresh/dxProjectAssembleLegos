@@ -4,9 +4,40 @@ project(dxProjectAssembleLegos LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
 # Tell CMake where to find our FindMuJoCo.cmake
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+#--------------------------
+#		 	QT
+#--------------------------
+if(NOT DEFINED ENV{QTDIR})
+	MESSAGE(STATUS "QTDIR environment variable not set. Be sure to set the QTDIR cmake cache variable to the Qt root install location")
+else()
+	message(STATUS "Qt Dir Found: $ENV{QTDIR}")
+endif()
+
+find_package(Qt5 COMPONENTS Core Gui Network OpenGL Widgets QUIET)
+
+if(Qt5_FOUND)
+	set(QT_LIBRARIES ${Qt5Core_LIBRARIES} ${Qt5Gui_LIBRARIES} ${Qt5OpenGL_LIBRARIES} ${Qt5Network_LIBRARIES} ${Qt5Widgets_LIBRARIES})
+	set(QT_FOUND Qt5_FOUND)
+else()
+	message(STATUS "QT5 Not Found")
+endif()
+
+# Test for supported Qt version
+find_program(QMAKE_EXECUTABLE NAMES qmake HINTS ${QTDIR} ENV QTDIR PATH_SUFFIXES bin)
+execute_process(COMMAND ${QMAKE_EXECUTABLE} -query QT_VERSION OUTPUT_VARIABLE QT_VERSION)
+if(QT_VERSION VERSION_LESS QT_MINIMUM_VERSION)
+	MESSAGE(FATAL_ERROR "Minimum supported Qt version: ${QT_MINIMUM_VERSION}. Installed version: ${QT_VERSION}")
+endif()
+#--------------------------
+#		 	EIGEN
+#--------------------------
 find_package (Eigen3 REQUIRED)
 link_directories(${Eigen_INCLUDE_DIRS})
 
@@ -66,7 +97,12 @@ add_executable(dxProjectAssembleLegos main.cpp
     dxKinMuJoCo.cpp
     dxKinMuJoCo.h
     dxPlannerSimple.cpp
-    dxPlannerSimple.h)
+    dxPlannerSimple.h
+	mainwindow.h
+	mainwindow.cpp
+	mainwindow.ui
+    dxMuJoCoWindow.h
+    dxMuJoCoWindow.cpp)
 
 target_include_directories(dxProjectAssembleLegos PRIVATE
   ${Boost_INCLUDE_DIRS}
@@ -80,6 +116,7 @@ target_link_libraries(dxProjectAssembleLegos PRIVATE
   OpenGL::GL
   ${Boost_LIBRARIES}
   ${VISP_LIBRARIES}
+  ${QT_LIBRARIES}
 )
 
 
