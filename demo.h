@@ -21,6 +21,7 @@ public:
     void moveRobotToJointPos(const std::vector<double>& jointsRad);
     void test();
     void testKinematics();
+    void testPlanner();
 
     dxRobotViewerFactory* viewer() const { return mSim ? mSim->viewer() : nullptr; }
 

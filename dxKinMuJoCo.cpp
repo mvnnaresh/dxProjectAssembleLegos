@@ -1,4 +1,4 @@
-#include "dxKinMujo.h"
+#include "dxKinMuJoCo.h"
 
 #include <algorithm>
 #include <cmath>
@@ -41,12 +41,13 @@ void quat_multiply(const double a[4], const double b[4], double out[4])
 }
 }
 
-dxKinMujo::dxKinMujo(mjModel* model, mjData* data)
+dxKinMuJoCo::dxKinMuJoCo(mjModel* model, mjData* data)
+    : mModel(model), mDataRef(data)
 {
-    setModel(model, data);
+    init();
 }
 
-dxKinMujo::~dxKinMujo()
+dxKinMuJoCo::~dxKinMuJoCo()
 {
     if (mDataScratch)
     {
@@ -55,7 +56,7 @@ dxKinMujo::~dxKinMujo()
     }
 }
 
-bool dxKinMujo::setModel(mjModel* model, mjData* data)
+bool dxKinMuJoCo::setModel(mjModel* model, mjData* data)
 {
     if (mDataScratch)
     {
@@ -78,12 +79,20 @@ bool dxKinMujo::setModel(mjModel* model, mjData* data)
     return ensureScratchData() && (mEESiteId >= 0);
 }
 
-void dxKinMujo::setReferenceData(mjData* data)
+bool dxKinMuJoCo::init()
+{
+    if (!mModel) return false;
+    if (!setModel(mModel, mDataRef)) return false;
+    if (mDataRef) setReferenceData(mDataRef);
+    return true;
+}
+
+void dxKinMuJoCo::setReferenceData(mjData* data)
 {
     mDataRef = data;
 }
 
-bool dxKinMujo::setEndEffectorSite(const std::string& siteName)
+bool dxKinMuJoCo::setEndEffectorSite(const std::string& siteName)
 {
     if (!mModel) return false;
     const int id = mj_name2id(mModel, mjOBJ_SITE, siteName.c_str());
@@ -93,12 +102,12 @@ bool dxKinMujo::setEndEffectorSite(const std::string& siteName)
     return true;
 }
 
-int dxKinMujo::getDoF() const
+int dxKinMuJoCo::getDoF() const
 {
     return static_cast<int>(mQposIndices.size());
 }
 
-bool dxKinMujo::getFK(const std::vector<double>& qpos, PoseResult& out)
+bool dxKinMuJoCo::getFK(const std::vector<double>& qpos, PoseResult& out)
 {
     if (!mModel) return false;
     if (!ensureScratchData()) return false;
@@ -114,7 +123,7 @@ bool dxKinMujo::getFK(const std::vector<double>& qpos, PoseResult& out)
     return true;
 }
 
-bool dxKinMujo::getFKCurrent(PoseResult& out) const
+bool dxKinMuJoCo::getFKCurrent(PoseResult& out) const
 {
     if (!mModel) return false;
     if (mEESiteId < 0) return false;
@@ -129,7 +138,7 @@ bool dxKinMujo::getFKCurrent(PoseResult& out) const
     return true;
 }
 
-bool dxKinMujo::getIK(const std::vector<double>& seed,
+bool dxKinMuJoCo::getIK(const std::vector<double>& seed,
                       const std::vector<double>& targetPosQuat,
                       std::vector<double>& solution,
                       int maxIters,
@@ -266,7 +275,7 @@ bool dxKinMujo::getIK(const std::vector<double>& seed,
     return false;
 }
 
-bool dxKinMujo::resolveEndEffectorSite()
+bool dxKinMuJoCo::resolveEndEffectorSite()
 {
     if (!mModel) return false;
 
@@ -284,7 +293,7 @@ bool dxKinMujo::resolveEndEffectorSite()
     return false;
 }
 
-bool dxKinMujo::ensureScratchData()
+bool dxKinMuJoCo::ensureScratchData()
 {
     if (!mModel) return false;
     if (!mDataScratch)
@@ -292,7 +301,7 @@ bool dxKinMujo::ensureScratchData()
     return mDataScratch != nullptr;
 }
 
-void dxKinMujo::buildIndices()
+void dxKinMuJoCo::buildIndices()
 {
     if (!mModel) return;
     for (int jid = 0; jid < mModel->njnt; ++jid)
@@ -312,7 +321,7 @@ void dxKinMujo::buildIndices()
     }
 }
 
-bool dxKinMujo::applyQpos(const std::vector<double>& qpos, mjData* data) const
+bool dxKinMuJoCo::applyQpos(const std::vector<double>& qpos, mjData* data) const
 {
     if (!mModel || !data) return false;
     if (qpos.size() == static_cast<size_t>(mModel->nq))
@@ -332,7 +341,7 @@ bool dxKinMujo::applyQpos(const std::vector<double>& qpos, mjData* data) const
     return false;
 }
 
-std::vector<double> dxKinMujo::extractDofQpos(const mjData* data) const
+std::vector<double> dxKinMuJoCo::extractDofQpos(const mjData* data) const
 {
     std::vector<double> out;
     if (!data) return out;
@@ -342,7 +351,7 @@ std::vector<double> dxKinMujo::extractDofQpos(const mjData* data) const
     return out;
 }
 
-bool dxKinMujo::computePoseFromData(const mjData* data, PoseResult& out) const
+bool dxKinMuJoCo::computePoseFromData(const mjData* data, PoseResult& out) const
 {
     if (!data || mEESiteId < 0) return false;
     const double* pos = data->site_xpos + 3 * mEESiteId;

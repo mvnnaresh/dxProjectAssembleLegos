@@ -8,9 +8,9 @@ int main()
     if (!app.init())
         return -1;
 
-    app.testKinematics();
+    app.testPlanner();
 
-    app.test();
+    // app.test();
     app.run(10);
     return 0;
 }

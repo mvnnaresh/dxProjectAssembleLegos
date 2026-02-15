@@ -4,7 +4,8 @@
 #include <iostream>
 #include <thread>
 
-#include "dxKinMujo.h"
+#include "dxKinMuJoCo.h"
+#include "dxPlannerSimple.h"
 
 demo::demo(const std::string& modelPath, bool createViewer)
     : mSim(std::make_shared<dxRobotSimulator>(modelPath, createViewer))
@@ -123,9 +124,9 @@ void demo::testKinematics()
         return;
     }
 
-    dxKinMujo kin(mSim->model(), mSim->data());
+    dxKinMuJoCo kin(mSim->model(), mSim->data());
 
-    dxKinMujo::PoseResult fkResult;
+    dxKinMuJoCo::PoseResult fkResult;
     const std::vector<double> qpos = mSim->getQpos();
     if (!kin.getFK(qpos, fkResult))
     {
@@ -161,4 +162,63 @@ void demo::testKinematics()
               << pos[0] << ", " << pos[1] << ", " << pos[2] << std::endl;
     std::cout << "[testKinematics] IK " << (ikOk ? "converged" : "not converged")
               << ", solution size: " << solution.size() << std::endl;
+}
+
+void demo::testPlanner()
+{
+    std::thread([this]()
+    {
+        std::cout << "Press Enter to start joint-space planning..." << std::endl;
+        std::string line;
+        std::getline(std::cin, line);
+
+        if (!mSim || !mSim->model() || !mSim->data())
+        {
+            std::cout << "[testPlanner] simulator not initialized." << std::endl;
+            return;
+        }
+
+        dxKinMuJoCo kin(mSim->model(), mSim->data());
+        dxPlannerSimple planner(&kin);
+        if (!planner.init())
+        {
+            std::cout << "[testPlanner] planner init failed." << std::endl;
+            return;
+        }
+
+        dxKinMuJoCo::PoseResult fkResult;
+        if (!kin.getFKCurrent(fkResult))
+        {
+            std::cout << "[testPlanner] FK current failed." << std::endl;
+            return;
+        }
+
+        std::vector<double> start = std::get<2>(fkResult);
+        if (start.empty())
+        {
+            std::cout << "[testPlanner] empty joint state." << std::endl;
+            return;
+        }
+
+        const double delta = 25.0 * 3.141592653589793 / 180.0;
+        std::vector<double> goal = start;
+        for (double& v : goal)
+            v += delta;
+
+        const int steps = 200;
+        std::vector<std::vector<double>> trajectory = planner.planJoints(start, goal, steps);
+        if (trajectory.empty())
+        {
+            std::cout << "[testPlanner] joint planning failed." << std::endl;
+            return;
+        }
+
+        const auto latency = std::chrono::milliseconds(5);
+        for (const auto& point : trajectory)
+        {
+            if (mSim)
+                mSim->setCtrlTargets(point);
+            std::this_thread::sleep_for(latency);
+        }
+    }).detach();
 }

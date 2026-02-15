@@ -9,29 +9,25 @@
 #include <mujoco/mujoco.h>
 #include <visp3/core/vpHomogeneousMatrix.h>
 
-class dxKinMujo
+class dxKinMuJoCo
 {
 public:
     using PoseResult = std::tuple<vpHomogeneousMatrix, Eigen::Matrix4f, std::vector<double>>;
 
-    explicit dxKinMujo(mjModel* model = nullptr, mjData* data = nullptr);
-    ~dxKinMujo();
+    explicit dxKinMuJoCo(mjModel* model = nullptr, mjData* data = nullptr);
 
-    dxKinMujo(const dxKinMujo&) = delete;
-    dxKinMujo& operator=(const dxKinMujo&) = delete;
+    ~dxKinMuJoCo();
 
-    bool setModel(mjModel* model, mjData* data = nullptr);
-    void setReferenceData(mjData* data);
+    dxKinMuJoCo(const dxKinMuJoCo&) = delete;
 
-    bool setEndEffectorSite(const std::string& siteName);
-    const std::string& endEffectorSite() const
-    {
-        return mEESiteName;
-    }
+    dxKinMuJoCo& operator=(const dxKinMuJoCo&) = delete;
+
+    bool init();
 
     int getDoF() const;
 
     bool getFK(const std::vector<double>& qpos, PoseResult& out);
+
     bool getFKCurrent(PoseResult& out) const;
 
     bool getIK(const std::vector<double>& seed,
@@ -41,6 +37,16 @@ public:
                double posTol = 1e-4,
                double oriTol = 1e-3,
                double damping = 1e-3);
+
+protected:
+    bool setEndEffectorSite(const std::string& siteName);
+    const std::string& endEffectorSite() const
+    {
+        return mEESiteName;
+    }
+
+    bool setModel(mjModel* model, mjData* data = nullptr);
+    void setReferenceData(mjData* data);
 
 private:
     bool resolveEndEffectorSite();

@@ -63,8 +63,10 @@ add_executable(dxProjectAssembleLegos main.cpp
     demo.h
     dxRobotSimulator.cpp
     dxRobotSimulator.h
-    dxKinMujo.cpp
-    dxKinMujo.h)
+    dxKinMuJoCo.cpp
+    dxKinMuJoCo.h
+    dxPlannerSimple.cpp
+    dxPlannerSimple.h)
 
 target_include_directories(dxProjectAssembleLegos PRIVATE
   ${Boost_INCLUDE_DIRS}
