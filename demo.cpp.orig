@@ -18,9 +18,7 @@ demo::demo(const std::string& modelPath, bool createViewer)
 bool demo::init()
 {
     if (!mSim || !mSim->init())
-    {
         return false;
-    }
 
     mKin = std::make_unique<dxKinMuJoCo>(mSim->model(), mSim->data());
     mHasLastEePoint = false;
@@ -30,18 +28,14 @@ bool demo::init()
 void demo::reset()
 {
     if (mSim)
-    {
         mSim->reset();
-    }
 }
 
 // Apply queued trajectory waypoints or manual target commands to the simulator.
 void demo::update()
 {
     if (!mSim)
-    {
         return;
-    }
 
     {
         std::lock_guard<std::mutex> lock(mTrajectoryMutex);
@@ -53,17 +47,13 @@ void demo::update()
             // Keep controls aligned with qpos to avoid drift after direct state edits.
             mSim->setCtrlTargetsFromJointPositions(joints);
             if (mTrajectoryIndex >= mTrajectory.size())
-            {
                 mHasTrajectory = false;
-            }
             return;
         }
     }
 
     if (!mHasTarget)
-    {
         return;
-    }
 
     std::array<double, 6> joints;
     {
@@ -78,9 +68,7 @@ void demo::update()
 void demo::step(int steps)
 {
     if (!mSim)
-    {
         return;
-    }
 
     mSim->step(steps);
 
@@ -142,14 +130,10 @@ void demo::step(int steps)
 void demo::run(int stepsPerFrame)
 {
     if (!mSim || !mSim->viewer())
-    {
         return;
-    }
 
     if (stepsPerFrame < 1)
-    {
         stepsPerFrame = 1;
-    }
 
     while (mSim->viewer() && !mSim->viewer()->shouldClose())
     {
@@ -162,21 +146,13 @@ void demo::run(int stepsPerFrame)
 // Set a joint-space target for the robot (optionally including gripper joints).
 void demo::moveRobotToJointPos(const std::vector<double>& jointsRad, bool includeGripper)
 {
-    if (!mSim || !mSim->model() || jointsRad.empty())
-    {
-        return;
-    }
+    if (!mSim || !mSim->model() || jointsRad.empty()) return;
     const int dof = includeGripper ? mSim->model()->nq : (mKin ? mKin->getDoF() : mSim->model()->nq);
-    if (dof <= 0)
-    {
-        return;
-    }
+    if (dof <= 0) return;
     std::lock_guard<std::mutex> lock(mTargetMutex);
     const int limit = std::min(dof, static_cast<int>(jointsRad.size()));
     for (int i = 0; i < limit; ++i)
-    {
         mTargetJoints[i] = jointsRad[i];
-    }
     mHasTarget = true;
 }
 
@@ -196,9 +172,7 @@ void demo::test()
         {
             const std::vector<double> ctrl = mSim->getCtrl();
             for (int i = 0; i < 6 && i < static_cast<int>(ctrl.size()); ++i)
-            {
                 start[i] = ctrl[i];
-            }
         }
 
         auto lerp = [](double a, double b, double t)
@@ -213,9 +187,7 @@ void demo::test()
             const double t = static_cast<double>(i) / static_cast<double>(totalSteps);
             std::array<double, 6> joints;
             for (int j = 0; j < 6; ++j)
-            {
                 joints[j] = lerp(start[j], target[j], t);
-            }
 
             moveRobotToJointPos(std::vector<double>(joints.begin(), joints.end()));
             std::this_thread::sleep_for(latency);
@@ -310,14 +282,10 @@ void demo::testPlanner()
     std::vector<double> goal = start;
     int dof = kin.getDoF();
     if (dof > 7)
-    {
         dof = 6;
-    }
     const int limit = std::min(dof, static_cast<int>(goal.size()));
     for (int i = 0; i < limit; ++i)
-    {
         goal[static_cast<size_t>(i)] += delta;
-    }
 
     dxPlannerSimple::Params params;
     params.steps = 200;
@@ -347,16 +315,14 @@ void demo::testPlanner()
         {
             dxKinMuJoCo::PoseResult fkPlanned;
             if (!kin.getFK(point, fkPlanned))
-            {
                 continue;
-            }
 
             const Eigen::Matrix4f& pose = std::get<1>(fkPlanned);
             plannedPath.push_back({{
-                    static_cast<double>(pose(0, 3)),
-                    static_cast<double>(pose(1, 3)),
-                    static_cast<double>(pose(2, 3))
-                }});
+                static_cast<double>(pose(0, 3)),
+                static_cast<double>(pose(1, 3)),
+                static_cast<double>(pose(2, 3))
+            }});
         }
 
         {
@@ -412,14 +378,10 @@ void demo::testPlannerSimple()
     std::vector<double> goal = start;
     int dof = kin.getDoF();
     if (dof > 7)
-    {
         dof = 6;
-    }
     const int limit = std::min(dof, static_cast<int>(goal.size()));
     for (int i = 0; i < limit; ++i)
-    {
         goal[static_cast<size_t>(i)] += delta;
-    }
     planner.setGoal(goal);
 
     // Step 3: planner parameters (steps + optional debug path visualization).
@@ -458,16 +420,14 @@ void demo::testPlannerSimple()
         {
             dxKinMuJoCo::PoseResult fkPlanned;
             if (!kin.getFK(point, fkPlanned))
-            {
                 continue;
-            }
 
             const Eigen::Matrix4f& pose = std::get<1>(fkPlanned);
             plannedPath.push_back({{
-                    static_cast<double>(pose(0, 3)),
-                    static_cast<double>(pose(1, 3)),
-                    static_cast<double>(pose(2, 3))
-                }});
+                static_cast<double>(pose(0, 3)),
+                static_cast<double>(pose(1, 3)),
+                static_cast<double>(pose(2, 3))
+            }});
         }
 
         {

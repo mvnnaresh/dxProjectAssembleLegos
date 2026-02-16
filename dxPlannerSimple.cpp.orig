@@ -11,10 +11,7 @@ constexpr double kEps = 1e-9;
 void normalize_quat(double q[4])
 {
     const double n = std::sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
-    if (n < kEps)
-    {
-        return;
-    }
+    if (n < kEps) return;
     q[0] /= n;
     q[1] /= n;
     q[2] /= n;
@@ -67,10 +64,7 @@ dxPlannerSimple::dxPlannerSimple(dxKinMuJoCo* kin): mKin(kin)
 
 bool dxPlannerSimple::init(dxKinMuJoCo* kin)
 {
-    if (kin)
-    {
-        mKin = kin;
-    }
+    if (kin) mKin = kin;
     if (!mKin)
     {
         std::cerr << "[dxPlannerSimple] Warning: kinematics not set." << std::endl;
@@ -83,9 +77,7 @@ void dxPlannerSimple::setKinematics(dxKinMuJoCo* kin)
 {
     mKin = kin;
     if (!mKin)
-    {
         std::cerr << "[dxPlannerSimple] Warning: kinematics not set." << std::endl;
-    }
 }
 
 void dxPlannerSimple::setStart(const std::vector<double>& start)
@@ -109,19 +101,12 @@ bool dxPlannerSimple::solve()
 {
     mPath.clear();
     if (!mHasStart || !mHasGoal)
-    {
         return false;
-    }
     if (mStart.size() != mGoal.size())
-    {
         return false;
-    }
 
     int steps = mParams.steps;
-    if (steps < 2)
-    {
-        steps = 2;
-    }
+    if (steps < 2) steps = 2;
 
     mPath = planJoints(mStart, mGoal, steps);
     return !mPath.empty();
@@ -147,15 +132,9 @@ std::vector<std::vector<double>> dxPlannerSimple::planJoints(const std::vector<d
                               int steps) const
 {
     std::vector<std::vector<double>> trajectory;
-    if (start.size() != goal.size())
-    {
-        return trajectory;
-    }
+    if (start.size() != goal.size()) return trajectory;
 
-    if (steps < 2)
-    {
-        steps = 2;
-    }
+    if (steps < 2) steps = 2;
     trajectory.reserve(static_cast<size_t>(steps));
 
     for (int i = 0; i < steps; ++i)
@@ -163,9 +142,7 @@ std::vector<std::vector<double>> dxPlannerSimple::planJoints(const std::vector<d
         const double t = static_cast<double>(i) / static_cast<double>(steps - 1);
         std::vector<double> point(start.size(), 0.0);
         for (size_t j = 0; j < start.size(); ++j)
-        {
             point[j] = start[j] + (goal[j] - start[j]) * t;
-        }
         trajectory.push_back(std::move(point));
     }
 
@@ -184,19 +161,10 @@ bool dxPlannerSimple::planCartesian(const std::vector<double>& startPose,
         std::cerr << "[dxPlannerSimple] Warning: kinematics not set." << std::endl;
         return false;
     }
-    if (startPose.size() != 7 || goalPose.size() != 7)
-    {
-        return false;
-    }
-    if (seed.empty())
-    {
-        return false;
-    }
+    if (startPose.size() != 7 || goalPose.size() != 7) return false;
+    if (seed.empty()) return false;
 
-    if (steps < 2)
-    {
-        steps = 2;
-    }
+    if (steps < 2) steps = 2;
     trajectory.reserve(static_cast<size_t>(steps));
 
     double qa[4] = { startPose[3], startPose[4], startPose[5], startPose[6] };

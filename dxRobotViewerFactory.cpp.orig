@@ -23,20 +23,11 @@ dxRobotViewerFactory::~dxRobotViewerFactory()
 
 int dxRobotViewerFactory::run()
 {
-    if (!initGLFW())
-    {
-        return 1;
-    }
-    if (!createWindow())
-    {
-        return 2;
-    }
+    if (!initGLFW()) return 1;
+    if (!createWindow()) return 2;
     if (!mModel || !mData)
     {
-        if (!loadModel())
-        {
-            return 3;
-        }
+        if (!loadModel()) return 3;
     }
 
     initVisuals();
@@ -48,22 +39,10 @@ int dxRobotViewerFactory::run()
 
 bool dxRobotViewerFactory::init()
 {
-    if (mInitialized)
-    {
-        return true;
-    }
-    if (!mModel || !mData)
-    {
-        return false;
-    }
-    if (!initGLFW())
-    {
-        return false;
-    }
-    if (!createWindow())
-    {
-        return false;
-    }
+    if (mInitialized) return true;
+    if (!mModel || !mData) return false;
+    if (!initGLFW()) return false;
+    if (!createWindow()) return false;
     initVisuals();
     mInitialized = true;
     return true;
@@ -71,10 +50,7 @@ bool dxRobotViewerFactory::init()
 
 void dxRobotViewerFactory::renderOnce()
 {
-    if (!mInitialized || !mWindow)
-    {
-        return;
-    }
+    if (!mInitialized || !mWindow) return;
     renderFrame();
     glfwSwapBuffers(mWindow);
     glfwPollEvents();
@@ -82,10 +58,7 @@ void dxRobotViewerFactory::renderOnce()
 
 bool dxRobotViewerFactory::shouldClose() const
 {
-    if (!mWindow)
-    {
-        return true;
-    }
+    if (!mWindow) return true;
     return glfwWindowShouldClose(mWindow) != 0;
 }
 
@@ -186,9 +159,7 @@ void dxRobotViewerFactory::initVisuals()
 void dxRobotViewerFactory::mainLoop()
 {
     if (!mWindow || !mModel || !mData || !mCam || !mOpt || !mScn || !mCon)
-    {
         return;
-    }
 
     double lastWall = glfwGetTime();
     double simAccum = 0.0;
@@ -199,10 +170,7 @@ void dxRobotViewerFactory::mainLoop()
         double dtWall = now - lastWall;
         lastWall = now;
 
-        if (dtWall > 0.1)
-        {
-            dtWall = 0.1;
-        }
+        if (dtWall > 0.1) dtWall = 0.1;
         simAccum += dtWall;
 
         if (!mPaused)
@@ -239,20 +207,11 @@ void dxRobotViewerFactory::renderFrame()
 
 void dxRobotViewerFactory::shutdown()
 {
-    if (mShutdownDone)
-    {
-        return;
-    }
+    if (mShutdownDone) return;
     mShutdownDone = true;
 
-    if (mCon && mModel)
-    {
-        mjr_freeContext(mCon);
-    }
-    if (mScn && mModel)
-    {
-        mjv_freeScene(mScn);
-    }
+    if (mCon && mModel) mjr_freeContext(mCon);
+    if (mScn && mModel) mjv_freeScene(mScn);
 
     delete mCon;
     mCon = nullptr;
@@ -299,14 +258,8 @@ dxRobotViewerFactory* dxRobotViewerFactory::self(GLFWwindow* w)
 void dxRobotViewerFactory::keyCallback(GLFWwindow* w, int key, int, int action, int)
 {
     dxRobotViewerFactory* s = self(w);
-    if (!s)
-    {
-        return;
-    }
-    if (action == GLFW_RELEASE)
-    {
-        return;
-    }
+    if (!s) return;
+    if (action == GLFW_RELEASE) return;
 
     if (key == GLFW_KEY_ESCAPE)
     {
@@ -315,14 +268,8 @@ void dxRobotViewerFactory::keyCallback(GLFWwindow* w, int key, int, int action, 
     }
 
     // Handy dev controls
-    if (key == GLFW_KEY_SPACE)
-    {
-        s->mPaused = !s->mPaused;
-    }
-    if (key == GLFW_KEY_PERIOD && s->mPaused)
-    {
-        s->mStepOnce = true;
-    }
+    if (key == GLFW_KEY_SPACE) s->mPaused = !s->mPaused;
+    if (key == GLFW_KEY_PERIOD && s->mPaused) s->mStepOnce = true;
 
     if (key == GLFW_KEY_R && s->mModel && s->mData)
     {
@@ -334,23 +281,11 @@ void dxRobotViewerFactory::keyCallback(GLFWwindow* w, int key, int, int action, 
 void dxRobotViewerFactory::mouseButtonCallback(GLFWwindow* w, int button, int action, int)
 {
     dxRobotViewerFactory* s = self(w);
-    if (!s)
-    {
-        return;
-    }
+    if (!s) return;
 
-    if (button == GLFW_MOUSE_BUTTON_LEFT)
-    {
-        s->mBtnLeft = (action == GLFW_PRESS);
-    }
-    if (button == GLFW_MOUSE_BUTTON_MIDDLE)
-    {
-        s->mBtnMiddle = (action == GLFW_PRESS);
-    }
-    if (button == GLFW_MOUSE_BUTTON_RIGHT)
-    {
-        s->mBtnRight = (action == GLFW_PRESS);
-    }
+    if (button == GLFW_MOUSE_BUTTON_LEFT)   s->mBtnLeft = (action == GLFW_PRESS);
+    if (button == GLFW_MOUSE_BUTTON_MIDDLE) s->mBtnMiddle = (action == GLFW_PRESS);
+    if (button == GLFW_MOUSE_BUTTON_RIGHT)  s->mBtnRight = (action == GLFW_PRESS);
 
     glfwGetCursorPos(w, &s->mLastX, &s->mLastY);
 }
@@ -358,28 +293,19 @@ void dxRobotViewerFactory::mouseButtonCallback(GLFWwindow* w, int button, int ac
 void dxRobotViewerFactory::cursorPosCallback(GLFWwindow* w, double xpos, double ypos)
 {
     dxRobotViewerFactory* s = self(w);
-    if (!s || !s->mModel || !s->mScn || !s->mCam)
-    {
-        return;
-    }
+    if (!s || !s->mModel || !s->mScn || !s->mCam) return;
 
     const double dx = xpos - s->mLastX;
     const double dy = ypos - s->mLastY;
     s->mLastX = xpos;
     s->mLastY = ypos;
 
-    if (!s->mBtnLeft && !s->mBtnMiddle && !s->mBtnRight)
-    {
-        return;
-    }
+    if (!s->mBtnLeft && !s->mBtnMiddle && !s->mBtnRight) return;
 
     int width = 0;
     int height = 0;
     glfwGetFramebufferSize(w, &width, &height);
-    if (height <= 0)
-    {
-        return;
-    }
+    if (height <= 0) return;
 
     const bool shift =
         (glfwGetKey(w, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) ||
@@ -387,17 +313,11 @@ void dxRobotViewerFactory::cursorPosCallback(GLFWwindow* w, double xpos, double 
 
     mjtMouse act = mjMOUSE_NONE;
     if (s->mBtnRight)
-    {
         act = shift ? mjMOUSE_MOVE_V : mjMOUSE_MOVE_H;
-    }
     else if (s->mBtnMiddle)
-    {
         act = mjMOUSE_ZOOM;
-    }
     else if (s->mBtnLeft)
-    {
         act = shift ? mjMOUSE_ROTATE_V : mjMOUSE_ROTATE_H;
-    }
 
     mjv_moveCamera(s->mModel, act,
                    (mjtNum)(dx / static_cast<double>(height)),
@@ -408,10 +328,7 @@ void dxRobotViewerFactory::cursorPosCallback(GLFWwindow* w, double xpos, double 
 void dxRobotViewerFactory::scrollCallback(GLFWwindow* w, double, double yoffset)
 {
     dxRobotViewerFactory* s = self(w);
-    if (!s || !s->mModel || !s->mScn || !s->mCam)
-    {
-        return;
-    }
+    if (!s || !s->mModel || !s->mScn || !s->mCam) return;
 
     // Scroll zoom
     const mjtNum zoom = (mjtNum)(-0.05 * yoffset);

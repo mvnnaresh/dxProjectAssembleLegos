@@ -9,24 +9,15 @@ constexpr double kEps = 1e-9;
 
 double clamp_double(double v, double lo, double hi)
 {
-    if (v < lo)
-    {
-        return lo;
-    }
-    if (v > hi)
-    {
-        return hi;
-    }
+    if (v < lo) return lo;
+    if (v > hi) return hi;
     return v;
 }
 
 void normalize_quat(double q[4])
 {
     const double n = std::sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
-    if (n < kEps)
-    {
-        return;
-    }
+    if (n < kEps) return;
     q[0] /= n;
     q[1] /= n;
     q[2] /= n;
@@ -80,10 +71,7 @@ bool dxKinMuJoCo::setModel(mjModel* model, mjData* data)
     mQposIndices.clear();
     mDofIndices.clear();
 
-    if (!mModel)
-    {
-        return false;
-    }
+    if (!mModel) return false;
 
     buildIndices();
     resolveEndEffectorBody();
@@ -92,18 +80,9 @@ bool dxKinMuJoCo::setModel(mjModel* model, mjData* data)
 
 bool dxKinMuJoCo::init()
 {
-    if (!mModel)
-    {
-        return false;
-    }
-    if (!setModel(mModel, mDataRef))
-    {
-        return false;
-    }
-    if (mDataRef)
-    {
-        setReferenceData(mDataRef);
-    }
+    if (!mModel) return false;
+    if (!setModel(mModel, mDataRef)) return false;
+    if (mDataRef) setReferenceData(mDataRef);
     return true;
 }
 
@@ -119,30 +98,15 @@ int dxKinMuJoCo::getDoF() const
 
 bool dxKinMuJoCo::getFK(const std::vector<double>& qpos, PoseResult& out)
 {
-    if (!mModel)
-    {
-        return false;
-    }
-    if (!ensureScratchData())
-    {
-        return false;
-    }
-    if (mEEBodyId < 0)
-    {
-        return false;
-    }
+    if (!mModel) return false;
+    if (!ensureScratchData()) return false;
+    if (mEEBodyId < 0) return false;
 
     mj_resetData(mModel, mDataScratch);
-    if (!applyQpos(qpos, mDataScratch))
-    {
-        return false;
-    }
+    if (!applyQpos(qpos, mDataScratch)) return false;
 
     mj_forward(mModel, mDataScratch);
-    if (!computePoseFromData(mDataScratch, out))
-    {
-        return false;
-    }
+    if (!computePoseFromData(mDataScratch, out)) return false;
 
     std::get<2>(out) = qpos;
     return true;
@@ -150,26 +114,14 @@ bool dxKinMuJoCo::getFK(const std::vector<double>& qpos, PoseResult& out)
 
 bool dxKinMuJoCo::getFKCurrent(PoseResult& out) const
 {
-    if (!mModel)
-    {
-        return false;
-    }
-    if (mEEBodyId < 0)
-    {
-        return false;
-    }
+    if (!mModel) return false;
+    if (mEEBodyId < 0) return false;
 
     mjData* data = mDataRef ? mDataRef : mDataScratch;
-    if (!data)
-    {
-        return false;
-    }
+    if (!data) return false;
 
     mj_forward(mModel, data);
-    if (!computePoseFromData(data, out))
-    {
-        return false;
-    }
+    if (!computePoseFromData(data, out)) return false;
 
     std::get<2>(out) = extractDofQpos(data);
     return true;
@@ -183,35 +135,18 @@ bool dxKinMuJoCo::getIK(const std::vector<double>& seed,
                         double oriTol,
                         double damping)
 {
-    if (!mModel)
-    {
-        return false;
-    }
-    if (!ensureScratchData())
-    {
-        return false;
-    }
-    if (mEEBodyId < 0)
-    {
-        return false;
-    }
-    if (targetPosQuat.size() != 7)
-    {
-        return false;
-    }
+    if (!mModel) return false;
+    if (!ensureScratchData()) return false;
+    if (mEEBodyId < 0) return false;
+    if (targetPosQuat.size() != 7) return false;
 
     const int dofCount = static_cast<int>(mQposIndices.size());
     if (seed.size() != static_cast<size_t>(mModel->nq) &&
             seed.size() != static_cast<size_t>(dofCount))
-    {
         return false;
-    }
 
     mj_resetData(mModel, mDataScratch);
-    if (!applyQpos(seed, mDataScratch))
-    {
-        return false;
-    }
+    if (!applyQpos(seed, mDataScratch)) return false;
 
     solution = seed;
 
@@ -279,13 +214,9 @@ bool dxKinMuJoCo::getIK(const std::vector<double>& seed,
         if (posNorm < posTol && angNorm < oriTol)
         {
             if (seed.size() == static_cast<size_t>(mModel->nq))
-            {
                 solution.assign(mDataScratch->qpos, mDataScratch->qpos + mModel->nq);
-            }
             else
-            {
                 solution = extractDofQpos(mDataScratch);
-            }
             return true;
         }
 
@@ -328,22 +259,15 @@ bool dxKinMuJoCo::getIK(const std::vector<double>& seed,
     }
 
     if (seed.size() == static_cast<size_t>(mModel->nq))
-    {
         solution.assign(mDataScratch->qpos, mDataScratch->qpos + mModel->nq);
-    }
     else
-    {
         solution = extractDofQpos(mDataScratch);
-    }
     return false;
 }
 
 bool dxKinMuJoCo::resolveEndEffectorBody()
 {
-    if (!mModel)
-    {
-        return false;
-    }
+    if (!mModel) return false;
 
     int bestBody = -1;
     int bestDepth = -1;
@@ -367,9 +291,7 @@ bool dxKinMuJoCo::resolveEndEffectorBody()
     }
 
     if (bestBody < 0 && mModel->nbody > 1)
-    {
         bestBody = mModel->nbody - 1;
-    }
 
     mEEBodyId = bestBody;
     return mEEBodyId >= 0;
@@ -377,41 +299,25 @@ bool dxKinMuJoCo::resolveEndEffectorBody()
 
 bool dxKinMuJoCo::ensureScratchData()
 {
-    if (!mModel)
-    {
-        return false;
-    }
+    if (!mModel) return false;
     if (!mDataScratch)
-    {
         mDataScratch = mj_makeData(mModel);
-    }
     return mDataScratch != nullptr;
 }
 
 void dxKinMuJoCo::buildIndices()
 {
-    if (!mModel)
-    {
-        return;
-    }
+    if (!mModel) return;
     for (int jid = 0; jid < mModel->njnt; ++jid)
     {
         const int type = mModel->jnt_type[jid];
         if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
-        {
             continue;
-        }
 
         const int qposAdr = mModel->jnt_qposadr[jid];
         const int dofAdr = mModel->jnt_dofadr[jid];
-        if (qposAdr < 0 || qposAdr >= mModel->nq)
-        {
-            continue;
-        }
-        if (dofAdr < 0 || dofAdr >= mModel->nv)
-        {
-            continue;
-        }
+        if (qposAdr < 0 || qposAdr >= mModel->nq) continue;
+        if (dofAdr < 0 || dofAdr >= mModel->nv) continue;
 
         mJointIds.push_back(jid);
         mQposIndices.push_back(qposAdr);
@@ -421,25 +327,18 @@ void dxKinMuJoCo::buildIndices()
 
 bool dxKinMuJoCo::applyQpos(const std::vector<double>& qpos, mjData* data) const
 {
-    if (!mModel || !data)
-    {
-        return false;
-    }
+    if (!mModel || !data) return false;
     if (qpos.size() == static_cast<size_t>(mModel->nq))
     {
         for (int i = 0; i < mModel->nq; ++i)
-        {
             data->qpos[i] = qpos[i];
-        }
         return true;
     }
 
     if (qpos.size() == mQposIndices.size())
     {
         for (size_t i = 0; i < mQposIndices.size(); ++i)
-        {
             data->qpos[mQposIndices[i]] = qpos[i];
-        }
         return true;
     }
 
@@ -449,24 +348,16 @@ bool dxKinMuJoCo::applyQpos(const std::vector<double>& qpos, mjData* data) const
 std::vector<double> dxKinMuJoCo::extractDofQpos(const mjData* data) const
 {
     std::vector<double> out;
-    if (!data)
-    {
-        return out;
-    }
+    if (!data) return out;
     out.reserve(mQposIndices.size());
     for (int idx : mQposIndices)
-    {
         out.push_back(data->qpos[idx]);
-    }
     return out;
 }
 
 bool dxKinMuJoCo::computePoseFromData(const mjData* data, PoseResult& out) const
 {
-    if (!data || mEEBodyId < 0)
-    {
-        return false;
-    }
+    if (!data || mEEBodyId < 0) return false;
     const double* pos = data->xpos + 3 * mEEBodyId;
     const double* mat = data->xmat + 9 * mEEBodyId;
 

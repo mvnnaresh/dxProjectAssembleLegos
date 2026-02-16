@@ -21,25 +21,15 @@ public:
     void update();
     void step(int steps = 1);
     void run(int stepsPerFrame = 10);
-    void moveRobotToJointPos(const std::vector<double>& jointsRad, bool includeGripper = false);
+    void moveRobotToJointPos(const std::vector<double>& jointsRad);
     void test();
     void testKinematics();
     void testPlanner();
-    void testPlannerSimple();
     void setViewer(dxMuJoCoWindow* viewer);
 
-    dxRobotViewerFactory* viewer() const
-    {
-        return mSim ? mSim->viewer() : nullptr;
-    }
-    mjModel* model() const
-    {
-        return mSim ? mSim->model() : nullptr;
-    }
-    mjData* data() const
-    {
-        return mSim ? mSim->data() : nullptr;
-    }
+    dxRobotViewerFactory* viewer() const { return mSim ? mSim->viewer() : nullptr; }
+    mjModel* model() const { return mSim ? mSim->model() : nullptr; }
+    mjData* data() const { return mSim ? mSim->data() : nullptr; }
 
 private:
     std::shared_ptr<dxRobotSimulator> mSim;
@@ -48,7 +38,7 @@ private:
     std::array<double, 6> mTargetJoints = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
     bool mHasTarget = false;
     std::mutex mTrajectoryMutex;
-    std::vector<std::vector<double>> mTrajectory;
+    std::vector<std::array<double, 6>> mTrajectory;
     size_t mTrajectoryIndex = 0;
     bool mHasTrajectory = false;
     std::unique_ptr<dxKinMuJoCo> mKin;
@@ -58,3 +48,4 @@ private:
     std::vector<std::array<double, 3>> mPlannedPath;
     bool mHasPlannedPath = false;
 };
+

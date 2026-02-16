@@ -48,21 +48,11 @@ public:
     bool setCtrlByName(const std::string& actuatorName, double value);
     void setCtrlTargets(const std::vector<double>& targets);
     void setCtrlTargetsFromJointPositions(const std::vector<double>& jointPositions);
-    void setQposFromJointPositions(const std::vector<double>& jointPositions);
 
-    dxRobotViewerFactory* viewer() const
-    {
-        return mViewer.get();
-    }
+    dxRobotViewerFactory* viewer() const { return mViewer.get(); }
 
-    mjModel* model() const
-    {
-        return mModel;
-    }
-    mjData* data() const
-    {
-        return mData;
-    }
+    mjModel* model() const { return mModel; }
+    mjData* data() const { return mData; }
 
 private:
     bool applyPoseByName(const char* poseName);
@@ -77,3 +67,4 @@ private:
     mjModel* mModel = nullptr;
     mjData* mData = nullptr;
 };
+

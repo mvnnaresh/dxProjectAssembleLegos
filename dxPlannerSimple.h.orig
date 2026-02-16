@@ -26,7 +26,6 @@ public:
     bool solve();
     const std::vector<std::vector<double>>& getPath() const;
     std::vector<std::vector<double>> buildTrajectory() const;
-    std::vector<std::vector<double>> buildTrajectory(const std::vector<std::vector<double>>& path) const;
 
     bool planCartesian(const std::vector<double>& startPose,
                        const std::vector<double>& goalPose,
@@ -36,8 +35,8 @@ public:
 
 private:
     std::vector<std::vector<double>> planJoints(const std::vector<double>& start,
-                                  const std::vector<double>& goal,
-                                  int steps) const;
+                                                const std::vector<double>& goal,
+                                                int steps) const;
 
     dxKinMuJoCo* mKin = nullptr;
     Params mParams;

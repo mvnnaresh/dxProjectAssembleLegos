@@ -58,9 +58,7 @@ void dxMuJoCoWindow::setModel(mjModel* model, mjData* data, bool ownsModelData)
     mData = data;
     mOwnsModelData = ownsModelData;
     if (mModel && mData)
-    {
         mj_forward(mModel, mData);
-    }
 
     mNeedsVisualInit = true;
     update();
@@ -68,10 +66,7 @@ void dxMuJoCoWindow::setModel(mjModel* model, mjData* data, bool ownsModelData)
 
 void dxMuJoCoWindow::reset()
 {
-    if (!mModel || !mData)
-    {
-        return;
-    }
+    if (!mModel || !mData) return;
     mj_resetData(mModel, mData);
     mj_forward(mModel, mData);
     update();
@@ -81,9 +76,7 @@ void dxMuJoCoWindow::setPlannedPath(const std::vector<std::array<double, 3>>& po
 {
     mPlannedPath = points;
     if (mPlannedPath.size() > mMaxPathPoints)
-    {
         mPlannedPath.resize(mMaxPathPoints);
-    }
     update();
 }
 
@@ -103,40 +96,26 @@ void dxMuJoCoWindow::addExecutedPoint(const std::array<double, 3>& point)
         const double dz = point[2] - last[2];
         const double dist2 = dx * dx + dy * dy + dz * dz;
         if (dist2 < 1e-8)
-        {
             return;
-        }
     }
 
     mExecutedPath.push_back(point);
     if (mExecutedPath.size() > mMaxPathPoints)
-    {
         mExecutedPath.erase(mExecutedPath.begin(), mExecutedPath.begin() + (mExecutedPath.size() - mMaxPathPoints));
-    }
 }
 
 void dxMuJoCoWindow::initializeGL()
 {
     if (mModel)
-    {
         initVisuals();
-    }
 }
 
 void dxMuJoCoWindow::paintGL()
 {
-    if (!mModel || !mData)
-    {
-        return;
-    }
+    if (!mModel || !mData) return;
     if (!mVisualsReady && mNeedsVisualInit)
-    {
         initVisuals();
-    }
-    if (!mVisualsReady)
-    {
-        return;
-    }
+    if (!mVisualsReady) return;
 
     if (QOpenGLFunctions* f = context() ? context()->functions() : nullptr)
     {
@@ -167,22 +146,10 @@ void dxMuJoCoWindow::resizeGL(int w, int h)
 
 void dxMuJoCoWindow::mousePressEvent(QMouseEvent* event)
 {
-    if (!event)
-    {
-        return;
-    }
-    if (event->button() == Qt::LeftButton)
-    {
-        mBtnLeft = true;
-    }
-    if (event->button() == Qt::MiddleButton)
-    {
-        mBtnMiddle = true;
-    }
-    if (event->button() == Qt::RightButton)
-    {
-        mBtnRight = true;
-    }
+    if (!event) return;
+    if (event->button() == Qt::LeftButton) mBtnLeft = true;
+    if (event->button() == Qt::MiddleButton) mBtnMiddle = true;
+    if (event->button() == Qt::RightButton) mBtnRight = true;
     const QPointF p = event->localPos();
     mLastX = p.x();
     mLastY = p.y();
@@ -190,30 +157,15 @@ void dxMuJoCoWindow::mousePressEvent(QMouseEvent* event)
 
 void dxMuJoCoWindow::mouseReleaseEvent(QMouseEvent* event)
 {
-    if (!event)
-    {
-        return;
-    }
-    if (event->button() == Qt::LeftButton)
-    {
-        mBtnLeft = false;
-    }
-    if (event->button() == Qt::MiddleButton)
-    {
-        mBtnMiddle = false;
-    }
-    if (event->button() == Qt::RightButton)
-    {
-        mBtnRight = false;
-    }
+    if (!event) return;
+    if (event->button() == Qt::LeftButton) mBtnLeft = false;
+    if (event->button() == Qt::MiddleButton) mBtnMiddle = false;
+    if (event->button() == Qt::RightButton) mBtnRight = false;
 }
 
 void dxMuJoCoWindow::mouseMoveEvent(QMouseEvent* event)
 {
-    if (!event || !mModel || !mVisualsReady)
-    {
-        return;
-    }
+    if (!event || !mModel || !mVisualsReady) return;
 
     const QPointF p = event->localPos();
     const double xpos = p.x();
@@ -223,26 +175,17 @@ void dxMuJoCoWindow::mouseMoveEvent(QMouseEvent* event)
     mLastX = xpos;
     mLastY = ypos;
 
-    if (!mBtnLeft && !mBtnMiddle && !mBtnRight)
-    {
-        return;
-    }
+    if (!mBtnLeft && !mBtnMiddle && !mBtnRight) return;
 
     const bool shift = event->modifiers().testFlag(Qt::ShiftModifier);
 
     mjtMouse act = mjMOUSE_NONE;
     if (mBtnRight)
-    {
         act = shift ? mjMOUSE_MOVE_V : mjMOUSE_MOVE_H;
-    }
     else if (mBtnMiddle)
-    {
         act = mjMOUSE_ZOOM;
-    }
     else if (mBtnLeft)
-    {
         act = shift ? mjMOUSE_ROTATE_V : mjMOUSE_ROTATE_H;
-    }
 
     const double dpr = devicePixelRatio();
     const double h = std::max(1.0, static_cast<double>(height() * dpr));
@@ -256,10 +199,7 @@ void dxMuJoCoWindow::mouseMoveEvent(QMouseEvent* event)
 
 void dxMuJoCoWindow::wheelEvent(QWheelEvent* event)
 {
-    if (!event || !mModel || !mVisualsReady)
-    {
-        return;
-    }
+    if (!event || !mModel || !mVisualsReady) return;
     const QPointF angle = event->angleDelta();
     const QPointF pixel = event->pixelDelta();
     const double steps = (std::abs(pixel.y()) > 0.0) ? (pixel.y() / 120.0) : (angle.y() / 120.0);
@@ -270,10 +210,7 @@ void dxMuJoCoWindow::wheelEvent(QWheelEvent* event)
 
 void dxMuJoCoWindow::initVisuals()
 {
-    if (!mModel)
-    {
-        return;
-    }
+    if (!mModel) return;
 
     shutdownVisuals();
 
@@ -301,22 +238,16 @@ void dxMuJoCoWindow::initVisuals()
 void dxMuJoCoWindow::appendPathGeoms(const std::vector<std::array<double, 3>>& points, const float rgba[4])
 {
     if (points.empty())
-    {
         return;
-    }
 
     const int maxExtra = mScn.maxgeom - mScn.ngeom;
     if (maxExtra <= 0)
-    {
         return;
-    }
 
     const size_t pointCount = points.size();
     size_t step = 1;
     if (static_cast<int>(pointCount) > maxExtra)
-    {
         step = static_cast<size_t>((pointCount + maxExtra - 1) / maxExtra);
-    }
 
     const mjtNum mat[9] =
     {
@@ -340,10 +271,7 @@ void dxMuJoCoWindow::appendPathGeoms(const std::vector<std::array<double, 3>>& p
 
 void dxMuJoCoWindow::shutdownVisuals()
 {
-    if (!mVisualsReady)
-    {
-        return;
-    }
+    if (!mVisualsReady) return;
     mjr_freeContext(&mCon);
     mjv_freeScene(&mScn);
     mVisualsReady = false;
@@ -351,10 +279,7 @@ void dxMuJoCoWindow::shutdownVisuals()
 
 void dxMuJoCoWindow::shutdownModel()
 {
-    if (!mOwnsModelData)
-    {
-        return;
-    }
+    if (!mOwnsModelData) return;
 
     if (mData)
     {

@@ -35,45 +35,30 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
         {
             mDemo->update();
             mDemo->step(1);
-            if (mViewer)
-            {
-                mViewer->update();
-            }
+            if (mViewer) mViewer->update();
         }
     });
 
     connect(initButton, &QPushButton::clicked, this, [this]()
     {
         if (!mDemo)
-        {
             mDemo = std::make_unique<demo>(mModelPath, false);
-        }
         if (!mDemo->init())
-        {
             return;
-        }
 
         if (mViewer)
-        {
             mViewer->setModel(mDemo->model(), mDemo->data(), false);
-        }
         if (mDemo)
-        {
             mDemo->setViewer(mViewer);
-        }
 
         if (mSimTimer && !mSimTimer->isActive())
-        {
             mSimTimer->start();
-        }
     });
 
     connect(testButton, &QPushButton::clicked, this, [this]()
     {
         if (mDemo)
-        {
             mDemo->testPlannerSimple();
-        }
     });
 
 }

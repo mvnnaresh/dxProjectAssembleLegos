@@ -27,7 +27,7 @@ private:
     dxMuJoCoWindow* mViewer = nullptr;
     QTimer* mSimTimer = nullptr;
     std::unique_ptr<demo> mDemo;
-    std::string mModelPath = "models/iiwa14_allegro_right_scene.xml";
+    std::string mModelPath = "models/ur10e_2f85_scene.xml";
 };
 
 #endif // MAINWINDOW_H

@@ -22,14 +22,8 @@ public:
     void clearExecutedPath();
     void addExecutedPoint(const std::array<double, 3>& point);
 
-    mjModel* model() const
-    {
-        return mModel;
-    }
-    mjData* data() const
-    {
-        return mData;
-    }
+    mjModel* model() const { return mModel; }
+    mjData* data() const { return mData; }
 
 protected:
     void initializeGL() override;
