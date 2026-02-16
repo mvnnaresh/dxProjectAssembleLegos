@@ -39,17 +39,11 @@ public:
                double damping = 1e-3);
 
 protected:
-    bool setEndEffectorSite(const std::string& siteName);
-    const std::string& endEffectorSite() const
-    {
-        return mEESiteName;
-    }
-
     bool setModel(mjModel* model, mjData* data = nullptr);
     void setReferenceData(mjData* data);
 
 private:
-    bool resolveEndEffectorSite();
+    bool resolveEndEffectorBody();
     bool ensureScratchData();
     void buildIndices();
     bool applyQpos(const std::vector<double>& qpos, mjData* data) const;
@@ -60,8 +54,7 @@ private:
     mjData* mDataRef = nullptr;
     mjData* mDataScratch = nullptr;
 
-    std::string mEESiteName;
-    int mEESiteId = -1;
+    int mEEBodyId = -1;
 
     std::vector<int> mJointIds;
     std::vector<int> mQposIndices;

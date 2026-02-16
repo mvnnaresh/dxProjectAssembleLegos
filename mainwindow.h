@@ -9,7 +9,8 @@
 #include "dxMuJoCoWindow.h"
 #include "demo.h"
 
-namespace Ui {
+namespace Ui
+{
 class MainWindow;
 }
 

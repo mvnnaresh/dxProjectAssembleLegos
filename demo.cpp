@@ -19,12 +19,14 @@ bool demo::init()
 
 void demo::reset()
 {
-    if (mSim) mSim->reset();
+    if (mSim)
+        mSim->reset();
 }
 
 void demo::update()
 {
-    if (!mSim) return;
+    if (!mSim)
+        return;
 
     {
         std::lock_guard<std::mutex> lock(mTrajectoryMutex);
@@ -39,7 +41,8 @@ void demo::update()
         }
     }
 
-    if (!mHasTarget) return;
+    if (!mHasTarget)
+        return;
 
     std::array<double, 6> joints;
     {
@@ -53,13 +56,17 @@ void demo::update()
 
 void demo::step(int steps)
 {
-    if (mSim) mSim->step(steps);
+    if (mSim)
+        mSim->step(steps);
 }
 
 void demo::run(int stepsPerFrame)
 {
-    if (!mSim || !mSim->viewer()) return;
-    if (stepsPerFrame < 1) stepsPerFrame = 1;
+    if (!mSim || !mSim->viewer())
+        return;
+
+    if (stepsPerFrame < 1)
+        stepsPerFrame = 1;
 
     while (mSim->viewer() && !mSim->viewer()->shouldClose())
     {
@@ -135,13 +142,15 @@ void demo::testKinematics()
     }
 
     const Eigen::Matrix4f& pose = std::get<1>(fkResult);
-    const std::array<double, 3> pos = {
+    const std::array<double, 3> pos =
+    {
         static_cast<double>(pose(0, 3)),
         static_cast<double>(pose(1, 3)),
         static_cast<double>(pose(2, 3))
     };
 
-    double mat[9] = {
+    double mat[9] =
+    {
         static_cast<double>(pose(0, 0)), static_cast<double>(pose(0, 1)), static_cast<double>(pose(0, 2)),
         static_cast<double>(pose(1, 0)), static_cast<double>(pose(1, 1)), static_cast<double>(pose(1, 2)),
         static_cast<double>(pose(2, 0)), static_cast<double>(pose(2, 1)), static_cast<double>(pose(2, 2))
@@ -149,7 +158,8 @@ void demo::testKinematics()
     double quat[4] = { 1.0, 0.0, 0.0, 0.0 };
     mju_mat2Quat(quat, mat);
 
-    std::vector<double> target = {
+    std::vector<double> target =
+    {
         pos[0], pos[1], pos[2],
         quat[0], quat[1], quat[2], quat[3]
     };
