@@ -21,9 +21,7 @@ public:
     void setModel(mjModel* model);
     void reset();
 
-    void setPlannedPath(const std::vector<std::array<double, 3>>& points);
-    void clearExecutedPath();
-    void addExecutedPoint(const std::array<double, 3>& point);
+    void drawTrajectory(const std::vector<std::array<double, 3>>& points);
 
     mjModel* model() const
     {
@@ -71,7 +69,6 @@ private:
     double mLastX = 0.0;
     double mLastY = 0.0;
 
-    std::vector<std::array<double, 3>> mPlannedPath;
-    std::vector<std::array<double, 3>> mExecutedPath;
+    std::vector<std::array<double, 3>> mTrajectoryPath;
     size_t mMaxPathPoints = 4000;
 };

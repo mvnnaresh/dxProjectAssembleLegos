@@ -8,6 +8,8 @@
 #include <QVBoxLayout>
 #include <QString>
 
+#include <array>
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
@@ -15,6 +17,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
     setWindowTitle("DexMan Digital Twin + Viewer");
 
     qRegisterMetaType<std::vector<double>>("std::vector<double>");
+    qRegisterMetaType<std::vector<std::array<double, 3>>>("std::vector<std::array<double, 3>>");
 
     mViewer = new dxMuJoCoRobotViewer();
     QWidget* container = QWidget::createWindowContainer(mViewer, this);
@@ -52,6 +55,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
                     mSim, &dxMuJoCoRobotSimulator::setJointPositions, Qt::QueuedConnection);
             connect(mDemo.get(), &demo::ctrlTargetsFromJointsReady,
                     mSim, &dxMuJoCoRobotSimulator::setCtrlTargetsFromJointPositions, Qt::QueuedConnection);
+            connect(mDemo.get(), &demo::drawTrajectory,
+                    mViewer, &dxMuJoCoRobotViewer::drawTrajectory);
         }
         QMetaObject::invokeMethod(mSim, "loadModel", Qt::QueuedConnection,
                                   Q_ARG(QString, QString::fromStdString(mModelPath)));

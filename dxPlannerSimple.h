@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <vector>
 
 #include "dxKinMuJoCo.h"
@@ -27,6 +28,8 @@ public:
     const std::vector<std::vector<double>>& getPath() const;
     std::vector<std::vector<double>> buildTrajectory() const;
     std::vector<std::vector<double>> buildTrajectory(const std::vector<std::vector<double>>& path) const;
+    std::vector<std::array<double, 3>> getPathAs3DPoints() const;
+    std::vector<std::array<double, 3>> getTrajAs3DPoints(const std::vector<std::vector<double>>& trajectory) const;
 
     bool planCartesian(const std::vector<double>& startPose,
                        const std::vector<double>& goalPose,
@@ -38,6 +41,7 @@ private:
     std::vector<std::vector<double>> planJoints(const std::vector<double>& start,
                                   const std::vector<double>& goal,
                                   int steps) const;
+    std::vector<std::array<double, 3>> build3DPoints(const std::vector<std::vector<double>>& qpath) const;
 
     dxKinMuJoCo* mKin = nullptr;
     Params mParams;

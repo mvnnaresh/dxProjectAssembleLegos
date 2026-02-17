@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <array>
 
 namespace
 {
@@ -142,6 +143,17 @@ std::vector<std::vector<double>> dxPlannerSimple::buildTrajectory(const std::vec
     return path;
 }
 
+std::vector<std::array<double, 3>> dxPlannerSimple::getPathAs3DPoints() const
+{
+    return build3DPoints(mPath);
+}
+
+std::vector<std::array<double, 3>> dxPlannerSimple::getTrajAs3DPoints(
+    const std::vector<std::vector<double>>& trajectory) const
+{
+    return build3DPoints(trajectory);
+}
+
 std::vector<std::vector<double>> dxPlannerSimple::planJoints(const std::vector<double>& start,
                               const std::vector<double>& goal,
                               int steps) const
@@ -170,6 +182,32 @@ std::vector<std::vector<double>> dxPlannerSimple::planJoints(const std::vector<d
     }
 
     return trajectory;
+}
+
+std::vector<std::array<double, 3>> dxPlannerSimple::build3DPoints(
+    const std::vector<std::vector<double>>& qpath) const
+{
+    std::vector<std::array<double, 3>> points;
+    if (!mKin)
+    {
+        return points;
+    }
+    points.reserve(qpath.size());
+    for (const auto& qpos : qpath)
+    {
+        dxKinMuJoCo::PoseResult fkPlanned;
+        if (!mKin->getFK(qpos, fkPlanned))
+        {
+            continue;
+        }
+        const Eigen::Matrix4f& pose = std::get<1>(fkPlanned);
+        points.push_back({{
+            static_cast<double>(pose(0, 3)),
+            static_cast<double>(pose(1, 3)),
+            static_cast<double>(pose(2, 3))
+        }});
+    }
+    return points;
 }
 
 bool dxPlannerSimple::planCartesian(const std::vector<double>& startPose,

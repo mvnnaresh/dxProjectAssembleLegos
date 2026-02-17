@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,8 @@ signals:
     void jointPositionsReady(const std::vector<double>& joints);
 
     void ctrlTargetsFromJointsReady(const std::vector<double>& joints);
+
+    void drawTrajectory(const std::vector<std::array<double, 3>>& points);
 
 private:
     void startTrajectoryPlayback();

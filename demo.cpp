@@ -168,6 +168,8 @@ void demo::testPlannerSimple()
         return;
     }
 
+    emit drawTrajectory(planner.getTrajAs3DPoints(mTrajectory));
+
     std::cout << std::fixed << std::setprecision(2);
     std::cout << "[testPlannerSimple] start (deg): ";
     for (size_t i = 0; i < start.size(); ++i)

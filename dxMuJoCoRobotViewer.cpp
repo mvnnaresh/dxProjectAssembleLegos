@@ -88,41 +88,12 @@ void dxMuJoCoRobotViewer::reset()
     update();
 }
 
-void dxMuJoCoRobotViewer::setPlannedPath(const std::vector<std::array<double, 3>>& points)
+void dxMuJoCoRobotViewer::drawTrajectory(const std::vector<std::array<double, 3>>& points)
 {
-    mPlannedPath = points;
-    if (mPlannedPath.size() > mMaxPathPoints)
+    mTrajectoryPath = points;
+    if (mTrajectoryPath.size() > mMaxPathPoints)
     {
-        mPlannedPath.resize(mMaxPathPoints);
-    }
-    update();
-}
-
-void dxMuJoCoRobotViewer::clearExecutedPath()
-{
-    mExecutedPath.clear();
-    update();
-}
-
-void dxMuJoCoRobotViewer::addExecutedPoint(const std::array<double, 3>& point)
-{
-    if (!mExecutedPath.empty())
-    {
-        const std::array<double, 3>& last = mExecutedPath.back();
-        const double dx = point[0] - last[0];
-        const double dy = point[1] - last[1];
-        const double dz = point[2] - last[2];
-        const double dist2 = dx * dx + dy * dy + dz * dz;
-        if (dist2 < 1e-8)
-        {
-            return;
-        }
-    }
-
-    mExecutedPath.push_back(point);
-    if (mExecutedPath.size() > mMaxPathPoints)
-    {
-        mExecutedPath.erase(mExecutedPath.begin(), mExecutedPath.begin() + (mExecutedPath.size() - mMaxPathPoints));
+        mTrajectoryPath.resize(mMaxPathPoints);
     }
     update();
 }
@@ -192,10 +163,8 @@ void dxMuJoCoRobotViewer::paintGL()
     mjrRect viewport = { 0, 0, w, h };
 
     mjv_updateScene(mModel, mData, &mOpt, nullptr, &mCam, mjCAT_ALL, &mScn);
-    const float plannedColor[4] = { 0.1f, 0.8f, 0.95f, 1.0f };
-    const float executedColor[4] = { 0.98f, 0.35f, 0.1f, 1.0f };
-    appendPathGeoms(mPlannedPath, plannedColor);
-    appendPathGeoms(mExecutedPath, executedColor);
+    const float pathColor[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
+    appendPathGeoms(mTrajectoryPath, pathColor);
     mjr_render(viewport, &mScn, &mCon);
 }
 
