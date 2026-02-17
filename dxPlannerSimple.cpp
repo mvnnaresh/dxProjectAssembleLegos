@@ -163,6 +163,10 @@ std::vector<std::vector<double>> dxPlannerSimple::planJoints(const std::vector<d
     {
         return trajectory;
     }
+    if (mParams.checkCollisions && !mKin)
+    {
+        return trajectory;
+    }
 
     if (steps < 2)
     {
@@ -177,6 +181,17 @@ std::vector<std::vector<double>> dxPlannerSimple::planJoints(const std::vector<d
         for (size_t j = 0; j < start.size(); ++j)
         {
             point[j] = start[j] + (goal[j] - start[j]) * t;
+        }
+        if (mParams.checkCollisions &&
+            !mKin->isCollisionFree(point, mParams.collisionDist))
+        {
+            std::cerr << "[dxPlannerSimple] Collision detected in joint plan." << std::endl;
+            if (mParams.debugPaths && mKin)
+            {
+                mKin->printContacts(point, 10);
+            }
+            trajectory.clear();
+            return trajectory;
         }
         trajectory.push_back(std::move(point));
     }
@@ -230,6 +245,10 @@ bool dxPlannerSimple::planCartesian(const std::vector<double>& startPose,
     {
         return false;
     }
+    if (mParams.checkCollisions && !mKin)
+    {
+        return false;
+    }
 
     if (steps < 2)
     {
@@ -263,6 +282,17 @@ bool dxPlannerSimple::planCartesian(const std::vector<double>& startPose,
         const bool ok = mKin->getIK(currentSeed, pose, solution);
         if (!ok)
         {
+            trajectory.clear();
+            return false;
+        }
+        if (mParams.checkCollisions &&
+            !mKin->isCollisionFree(solution, mParams.collisionDist))
+        {
+            std::cerr << "[dxPlannerSimple] Collision detected in cartesian plan." << std::endl;
+            if (mParams.debugPaths && mKin)
+            {
+                mKin->printContacts(solution, 10);
+            }
             trajectory.clear();
             return false;
         }

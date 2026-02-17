@@ -12,6 +12,8 @@ public:
     {
         int steps = 50;
         bool debugPaths = false;
+        bool checkCollisions = false;
+        double collisionDist = 0.0;
     };
 
     explicit dxPlannerSimple(dxKinMuJoCo* kin = nullptr);

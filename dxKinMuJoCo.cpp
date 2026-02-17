@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 
 namespace
 {
@@ -79,6 +80,7 @@ bool dxKinMuJoCo::setModel(mjModel* model, mjData* data)
     mJointIds.clear();
     mQposIndices.clear();
     mDofIndices.clear();
+    mRobotBodies.clear();
 
     if (!mModel)
     {
@@ -86,6 +88,7 @@ bool dxKinMuJoCo::setModel(mjModel* model, mjData* data)
     }
 
     buildIndices();
+    buildRobotBodies();
     resolveEndEffectorBody();
     return ensureScratchData() && (mEEBodyId >= 0);
 }
@@ -115,6 +118,15 @@ void dxKinMuJoCo::setReferenceData(mjData* data)
 int dxKinMuJoCo::getDoF() const
 {
     return static_cast<int>(mQposIndices.size());
+}
+
+int dxKinMuJoCo::getNq() const
+{
+    if (!mModel)
+    {
+        return 0;
+    }
+    return mModel->nq;
 }
 
 std::vector<double> dxKinMuJoCo::getDofQpos(const std::vector<double>& qpos) const
@@ -361,6 +373,148 @@ bool dxKinMuJoCo::getIK(const std::vector<double>& seed,
     return false;
 }
 
+bool dxKinMuJoCo::isCollisionFree(const std::vector<double>& qpos, double minDist)
+{
+    if (!mModel)
+    {
+        return false;
+    }
+    if (!ensureScratchData())
+    {
+        return false;
+    }
+
+    std::vector<double> fullQpos;
+    if (!buildFullQpos(qpos, fullQpos))
+    {
+        return false;
+    }
+
+    mj_resetData(mModel, mDataScratch);
+    if (!applyQpos(fullQpos, mDataScratch))
+    {
+        return false;
+    }
+
+    mj_forward(mModel, mDataScratch);
+    if (mDataScratch->ncon <= 0)
+    {
+        return true;
+    }
+
+    const int ncon = mDataScratch->ncon;
+    for (int i = 0; i < ncon; ++i)
+    {
+        const mjContact& contact = mDataScratch->contact[i];
+        const int g1 = contact.geom1;
+        const int g2 = contact.geom2;
+        const int b1 = (g1 >= 0 && g1 < mModel->ngeom) ? mModel->geom_bodyid[g1] : -1;
+        const int b2 = (g2 >= 0 && g2 < mModel->ngeom) ? mModel->geom_bodyid[g2] : -1;
+        const bool robotContact =
+            (b1 >= 0 && b1 < static_cast<int>(mRobotBodies.size()) && mRobotBodies[static_cast<size_t>(b1)]) ||
+            (b2 >= 0 && b2 < static_cast<int>(mRobotBodies.size()) && mRobotBodies[static_cast<size_t>(b2)]);
+        if (!robotContact)
+        {
+            continue;
+        }
+        if (contact.dist <= minDist)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool dxKinMuJoCo::buildFullQpos(const std::vector<double>& qpos, std::vector<double>& full) const
+{
+    if (!mModel)
+    {
+        return false;
+    }
+    if (qpos.size() == static_cast<size_t>(mModel->nq))
+    {
+        full = qpos;
+        return true;
+    }
+    if (qpos.size() != mQposIndices.size())
+    {
+        return false;
+    }
+    if (!mDataRef)
+    {
+        return false;
+    }
+
+    full.assign(mDataRef->qpos, mDataRef->qpos + mModel->nq);
+    for (size_t i = 0; i < mQposIndices.size(); ++i)
+    {
+        full[mQposIndices[i]] = qpos[i];
+    }
+    return true;
+}
+
+void dxKinMuJoCo::printContacts(const std::vector<double>& qpos, int maxContacts)
+{
+    if (!mModel)
+    {
+        return;
+    }
+    if (!ensureScratchData())
+    {
+        return;
+    }
+    if (maxContacts <= 0)
+    {
+        return;
+    }
+
+    std::vector<double> fullQpos;
+    if (!buildFullQpos(qpos, fullQpos))
+    {
+        return;
+    }
+
+    mj_resetData(mModel, mDataScratch);
+    if (!applyQpos(fullQpos, mDataScratch))
+    {
+        return;
+    }
+    mj_forward(mModel, mDataScratch);
+
+    const int ncon = mDataScratch->ncon;
+    if (ncon <= 0)
+    {
+        std::cerr << "[dxKinMuJoCo] No contacts." << std::endl;
+        return;
+    }
+
+    const int count = std::min(ncon, maxContacts);
+    std::cerr << "[dxKinMuJoCo] Contacts: " << ncon << std::endl;
+    for (int i = 0; i < count; ++i)
+    {
+        const mjContact& contact = mDataScratch->contact[i];
+        const int g1 = contact.geom1;
+        const int g2 = contact.geom2;
+        const int b1 = (g1 >= 0 && g1 < mModel->ngeom) ? mModel->geom_bodyid[g1] : -1;
+        const int b2 = (g2 >= 0 && g2 < mModel->ngeom) ? mModel->geom_bodyid[g2] : -1;
+        const char* g1Name = mj_id2name(mModel, mjOBJ_GEOM, g1);
+        const char* g2Name = mj_id2name(mModel, mjOBJ_GEOM, g2);
+        const char* b1Name = mj_id2name(mModel, mjOBJ_BODY, b1);
+        const char* b2Name = mj_id2name(mModel, mjOBJ_BODY, b2);
+
+        std::cerr << "  - geom1: " << (g1Name ? g1Name : "(unnamed)")
+                  << " (id " << g1 << ", body " << (b1Name ? b1Name : "(unnamed)")
+                  << "), geom2: " << (g2Name ? g2Name : "(unnamed)")
+                  << " (id " << g2 << ", body " << (b2Name ? b2Name : "(unnamed)")
+                  << "), dist=" << contact.dist << std::endl;
+    }
+    if (ncon > count)
+    {
+        std::cerr << "  ... (" << (ncon - count) << " more)" << std::endl;
+    }
+}
+
 bool dxKinMuJoCo::resolveEndEffectorBody()
 {
     if (!mModel)
@@ -439,6 +593,29 @@ void dxKinMuJoCo::buildIndices()
         mJointIds.push_back(jid);
         mQposIndices.push_back(qposAdr);
         mDofIndices.push_back(dofAdr);
+    }
+}
+
+void dxKinMuJoCo::buildRobotBodies()
+{
+    if (!mModel)
+    {
+        return;
+    }
+    mRobotBodies.assign(static_cast<size_t>(mModel->nbody), 0);
+    for (int jid : mJointIds)
+    {
+        int bodyId = mModel->jnt_bodyid[jid];
+        while (bodyId >= 0 && bodyId < mModel->nbody)
+        {
+            mRobotBodies[static_cast<size_t>(bodyId)] = 1;
+            const int parentId = mModel->body_parentid[bodyId];
+            if (parentId == bodyId)
+            {
+                break;
+            }
+            bodyId = parentId;
+        }
     }
 }
 

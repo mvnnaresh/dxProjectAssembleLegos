@@ -15,6 +15,12 @@ class demo : public QObject
     Q_OBJECT
 
 public:
+    enum class EndBehavior
+    {
+        StopCommands,
+        KeepLastPose
+    };
+
     explicit demo(dxMuJoCoRobotSimulator* simulator, QObject* parent = nullptr);
 
     bool init();
@@ -24,6 +30,8 @@ public:
     void testPlannerSimple();
 
     void testPlannerCartesian();
+
+    void setEndBehavior(EndBehavior behavior);
 
 signals:
     void ctrlTargetsReady(const std::vector<double>& targets);
@@ -49,6 +57,7 @@ private:
 
     size_t mTrajectoryIndex = 0;
     QTimer* mTrajectoryTimer = nullptr;
+    EndBehavior mEndBehavior = EndBehavior::StopCommands;
     std::vector<int> mArmDofIndices;
     std::vector<int> mGripperDofIndices;
 

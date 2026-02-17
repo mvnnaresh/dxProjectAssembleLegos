@@ -25,6 +25,7 @@ public:
     bool init();
 
     int getDoF() const;
+    int getNq() const;
 
     std::vector<double> getDofQpos(const std::vector<double>& qpos) const;
 
@@ -39,6 +40,9 @@ public:
                double posTol = 1e-4,
                double oriTol = 1e-3,
                double damping = 1e-3);
+    bool isCollisionFree(const std::vector<double>& qpos, double minDist = 0.0);
+    bool buildFullQpos(const std::vector<double>& qpos, std::vector<double>& full) const;
+    void printContacts(const std::vector<double>& qpos, int maxContacts = 10);
 
 protected:
     bool setModel(mjModel* model, mjData* data = nullptr);
@@ -48,6 +52,7 @@ private:
     bool resolveEndEffectorBody();
     bool ensureScratchData();
     void buildIndices();
+    void buildRobotBodies();
     bool applyQpos(const std::vector<double>& qpos, mjData* data) const;
     std::vector<double> extractDofQpos(const mjData* data) const;
     bool computePoseFromData(const mjData* data, PoseResult& out) const;
@@ -61,4 +66,5 @@ private:
     std::vector<int> mJointIds;
     std::vector<int> mQposIndices;
     std::vector<int> mDofIndices;
+    std::vector<char> mRobotBodies;
 };

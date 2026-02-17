@@ -231,7 +231,10 @@ void dxMuJoCoRobotSimulator::closeGripper()
 
     std::lock_guard<std::mutex> lock(mTargetMutex);
     mHoldCtrlTargets = targets;
-    mHoldMode = HoldMode::HoldCtrlTargets;
+    if (mHoldMode != HoldMode::HoldJointTargets || mHoldJointTargets.empty())
+    {
+        mHoldMode = HoldMode::HoldCtrlTargets;
+    }
 }
 
 void dxMuJoCoRobotSimulator::loadModel(const QString& modelPath)

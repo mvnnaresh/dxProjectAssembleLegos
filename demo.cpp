@@ -14,10 +14,22 @@ demo::demo(dxMuJoCoRobotSimulator* simulator, QObject* parent)
     mTrajectoryTimer->setInterval(20);
     connect(mTrajectoryTimer, &QTimer::timeout, this, [this]()
     {
-        if (mTrajectoryIndex >= mTrajectory.size())
+        if (mTrajectory.empty())
         {
             mTrajectoryTimer->stop();
-            applyGripperClose();
+            return;
+        }
+        if (mTrajectoryIndex >= mTrajectory.size())
+        {
+            if (mEndBehavior == EndBehavior::StopCommands)
+            {
+                mTrajectoryTimer->stop();
+                return;
+            }
+
+            const std::vector<double>& joints = mTrajectory.back();
+            emit jointPositionsReady(joints);
+            emit ctrlTargetsFromJointsReady(joints);
             return;
         }
 
@@ -35,7 +47,7 @@ bool demo::init()
         return false;
     }
 
-    mKin = std::make_unique<dxKinMuJoCo>(mSim->model(), nullptr);
+    mKin = std::make_unique<dxKinMuJoCo>(mSim->model(), mSim->data());
     buildDofGroups();
     return true;
 }
@@ -147,7 +159,7 @@ void demo::testKinematics()
         return;
     }
 
-    dxKinMuJoCo kin(mSim->model(), nullptr);
+    dxKinMuJoCo kin(mSim->model(), mSim->data());
     const dxMuJoCoRobotState state = mSim->getRobotState();
 
     dxKinMuJoCo::PoseResult fkResult;
@@ -199,7 +211,7 @@ void demo::testPlannerSimple()
         return;
     }
 
-    dxKinMuJoCo kin(mSim->model(), nullptr);
+    dxKinMuJoCo kin(mSim->model(), mSim->data());
     dxPlannerSimple planner(&kin);
     if (!planner.init())
     {
@@ -215,7 +227,7 @@ void demo::testPlannerSimple()
         return;
     }
 
-    std::vector<double> start = extractArmDof(startDof);
+    std::vector<double> start = startDof;
     if (start.empty())
     {
         std::cout << "[testPlannerSimple] empty arm joint state." << std::endl;
@@ -226,17 +238,30 @@ void demo::testPlannerSimple()
 
     const double delta = 25.0 * 3.141592653589793 / 180.0;
     std::vector<double> goal = start;
-    const int dof = static_cast<int>(start.size());
-    const int limit = std::min(dof, static_cast<int>(goal.size()));
-    for (int i = 0; i < 6; ++i)
+    std::vector<int> armIndices = mArmDofIndices;
+    if (armIndices.empty())
     {
-        goal[i] += delta;
+        const int limit = std::min(6, static_cast<int>(goal.size()));
+        armIndices.reserve(static_cast<size_t>(limit));
+        for (int i = 0; i < limit; ++i)
+        {
+            armIndices.push_back(i);
+        }
+    }
+    for (int idx : armIndices)
+    {
+        if (idx >= 0 && static_cast<size_t>(idx) < goal.size())
+        {
+            goal[static_cast<size_t>(idx)] += delta;
+        }
     }
     planner.setGoal(goal);
 
     dxPlannerSimple::Params params;
     params.steps = 200;
-    params.debugPaths = false;
+    params.debugPaths = true;
+    params.checkCollisions = true;
+    params.collisionDist = 0.0;
     planner.setParams(params);
 
     if (!planner.solve())
@@ -252,19 +277,14 @@ void demo::testPlannerSimple()
         return;
     }
 
-    const std::vector<std::vector<double>> armTrajectory = planner.buildTrajectory(path);
-    if (armTrajectory.empty())
+    const std::vector<std::vector<double>> trajectory = planner.buildTrajectory(path);
+    if (trajectory.empty())
     {
         std::cout << "[testPlannerSimple] empty trajectory." << std::endl;
         return;
     }
 
-    mTrajectory.clear();
-    mTrajectory.reserve(armTrajectory.size());
-    for (const auto& point : armTrajectory)
-    {
-        mTrajectory.push_back(expandArmDof(startDof, point));
-    }
+    mTrajectory = trajectory;
     if (mTrajectory.empty())
     {
         std::cout << "[testPlannerSimple] empty trajectory." << std::endl;
@@ -275,23 +295,35 @@ void demo::testPlannerSimple()
 
     std::cout << std::fixed << std::setprecision(2);
     std::cout << "[testPlannerSimple] start (deg): ";
-    for (size_t i = 0; i < start.size(); ++i)
+    bool first = true;
+    for (int idx : armIndices)
     {
-        if (i > 0)
+        if (idx < 0 || static_cast<size_t>(idx) >= start.size())
+        {
+            continue;
+        }
+        if (!first)
         {
             std::cout << ", ";
         }
-        std::cout << (start[i] * 180.0 / 3.141592653589793);
+        std::cout << (start[static_cast<size_t>(idx)] * 180.0 / 3.141592653589793);
+        first = false;
     }
     std::cout << std::endl;
     std::cout << "[testPlannerSimple] goal  (deg): ";
-    for (size_t i = 0; i < goal.size(); ++i)
+    first = true;
+    for (int idx : armIndices)
     {
-        if (i > 0)
+        if (idx < 0 || static_cast<size_t>(idx) >= goal.size())
+        {
+            continue;
+        }
+        if (!first)
         {
             std::cout << ", ";
         }
-        std::cout << (goal[i] * 180.0 / 3.141592653589793);
+        std::cout << (goal[static_cast<size_t>(idx)] * 180.0 / 3.141592653589793);
+        first = false;
     }
     std::cout << std::endl;
 
@@ -307,13 +339,19 @@ void demo::testPlannerCartesian()
         return;
     }
 
-    dxKinMuJoCo kin(mSim->model(), nullptr);
+    dxKinMuJoCo kin(mSim->model(), mSim->data());
     dxPlannerSimple planner(&kin);
     if (!planner.init())
     {
         std::cout << "[testPlannerCartesian] planner init failed." << std::endl;
         return;
     }
+    dxPlannerSimple::Params params;
+    params.steps = 80;
+    params.debugPaths = true;
+    params.checkCollisions = true;
+    params.collisionDist = 0.0;
+    planner.setParams(params);
 
     const dxMuJoCoRobotState state = mSim->getRobotState();
     dxKinMuJoCo::PoseResult fkResult;
@@ -380,4 +418,9 @@ void demo::testPlannerCartesian()
     }
     emit drawTrajectory(planner.getTrajAs3DPoints(mTrajectory));
     startTrajectoryPlayback();
+}
+
+void demo::setEndBehavior(EndBehavior behavior)
+{
+    mEndBehavior = behavior;
 }
