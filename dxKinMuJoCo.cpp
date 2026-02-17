@@ -117,6 +117,29 @@ int dxKinMuJoCo::getDoF() const
     return static_cast<int>(mQposIndices.size());
 }
 
+std::vector<double> dxKinMuJoCo::getDofQpos(const std::vector<double>& qpos) const
+{
+    std::vector<double> out;
+    if (!mModel)
+    {
+        return out;
+    }
+    if (qpos.size() == mQposIndices.size())
+    {
+        return qpos;
+    }
+    if (qpos.size() != static_cast<size_t>(mModel->nq))
+    {
+        return out;
+    }
+    out.reserve(mQposIndices.size());
+    for (int idx : mQposIndices)
+    {
+        out.push_back(qpos[static_cast<size_t>(idx)]);
+    }
+    return out;
+}
+
 bool dxKinMuJoCo::getFK(const std::vector<double>& qpos, PoseResult& out)
 {
     if (!mModel)

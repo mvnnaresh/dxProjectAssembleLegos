@@ -1,60 +1,43 @@
 #pragma once
 
-#include <array>
-#include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 
-class dxMuJoCoWindow;
+#include <QObject>
+#include <QTimer>
 
 #include "dxKinMuJoCo.h"
-#include "dxRobotSimulator.h"
+#include "dxMuJoCoRobotSimulator.h"
 
-class demo
+class demo : public QObject
 {
+    Q_OBJECT
+
 public:
-    explicit demo(const std::string& modelPath, bool createViewer = true);
+    explicit demo(dxMuJoCoRobotSimulator* simulator, QObject* parent = nullptr);
 
     bool init();
-    void reset();
-    void update();
-    void step(int steps = 1);
-    void run(int stepsPerFrame = 10);
-    void moveRobotToJointPos(const std::vector<double>& jointsRad, bool includeGripper = false);
-    void test();
-    void testKinematics();
-    void testPlanner();
-    void testPlannerSimple();
-    void setViewer(dxMuJoCoWindow* viewer);
 
-    dxRobotViewerFactory* viewer() const
-    {
-        return mSim ? mSim->viewer() : nullptr;
-    }
-    mjModel* model() const
-    {
-        return mSim ? mSim->model() : nullptr;
-    }
-    mjData* data() const
-    {
-        return mSim ? mSim->data() : nullptr;
-    }
+    void testKinematics();
+
+    void testPlannerSimple();
+
+signals:
+    void ctrlTargetsReady(const std::vector<double>& targets);
+
+    void jointPositionsReady(const std::vector<double>& joints);
+
+    void ctrlTargetsFromJointsReady(const std::vector<double>& joints);
 
 private:
-    std::shared_ptr<dxRobotSimulator> mSim;
-    dxMuJoCoWindow* mViewer = nullptr;
-    mutable std::mutex mTargetMutex;
-    std::array<double, 6> mTargetJoints = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
-    bool mHasTarget = false;
-    std::mutex mTrajectoryMutex;
+    void startTrajectoryPlayback();
+
+    dxMuJoCoRobotSimulator* mSim = nullptr;
+
     std::vector<std::vector<double>> mTrajectory;
+
     size_t mTrajectoryIndex = 0;
-    bool mHasTrajectory = false;
+    QTimer* mTrajectoryTimer = nullptr;
+
     std::unique_ptr<dxKinMuJoCo> mKin;
-    std::array<double, 3> mLastEePoint = { 0.0, 0.0, 0.0 };
-    bool mHasLastEePoint = false;
-    std::mutex mPlannedMutex;
-    std::vector<std::array<double, 3>> mPlannedPath;
-    bool mHasPlannedPath = false;
 };

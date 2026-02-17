@@ -2,11 +2,12 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QTimer>
+#include <QThread>
 
 #include <memory>
 
-#include "dxMuJoCoWindow.h"
+#include "dxMuJoCoRobotSimulator.h"
+#include "dxMuJoCoRobotViewer.h"
 #include "demo.h"
 
 namespace Ui
@@ -22,12 +23,17 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
+private slots:
+    void onModelLoaded(mjModel* model);
+    void onStateUpdated();
+
 private:
     Ui::MainWindow *ui;
-    dxMuJoCoWindow* mViewer = nullptr;
-    QTimer* mSimTimer = nullptr;
+    dxMuJoCoRobotViewer* mViewer = nullptr;
+    dxMuJoCoRobotSimulator* mSim = nullptr;
+    QThread* mSimThread = nullptr;
     std::unique_ptr<demo> mDemo;
-    std::string mModelPath = "models/iiwa14_allegro_right_scene.xml";
+    std::string mModelPath = "models/ur10e_2f85_scene.xml";
 };
 
 #endif // MAINWINDOW_H

@@ -7,17 +7,20 @@
 #include <QOpenGLWindow>
 #include <mujoco/mujoco.h>
 
-class dxMuJoCoWindow : public QOpenGLWindow
+#include "dxMuJoCoRobotState.h"
+
+class dxMuJoCoRobotViewer : public QOpenGLWindow
 {
     Q_OBJECT
 
 public:
-    explicit dxMuJoCoWindow(QWindow* parent = nullptr);
-    ~dxMuJoCoWindow() override;
+    explicit dxMuJoCoRobotViewer(QWindow* parent = nullptr);
+    ~dxMuJoCoRobotViewer() override;
 
     bool loadModel(const std::string& modelPath);
-    void setModel(mjModel* model, mjData* data, bool ownsModelData);
+    void setModel(mjModel* model);
     void reset();
+
     void setPlannedPath(const std::vector<std::array<double, 3>>& points);
     void clearExecutedPath();
     void addExecutedPoint(const std::array<double, 3>& point);
@@ -30,6 +33,9 @@ public:
     {
         return mData;
     }
+
+public slots:
+    void applyState(const dxMuJoCoRobotState& state);
 
 protected:
     void initializeGL() override;
@@ -49,7 +55,8 @@ private:
     std::string mModelPath;
     mjModel* mModel = nullptr;
     mjData* mData = nullptr;
-    bool mOwnsModelData = false;
+    bool mOwnsModel = false;
+    bool mOwnsData = false;
 
     mjvCamera mCam;
     mjvOption mOpt;

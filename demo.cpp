@@ -1,242 +1,73 @@
 #include "demo.h"
 
-#include <algorithm>
 #include <iomanip>
 #include <iostream>
-#include <thread>
 
 #include "dxKinMuJoCo.h"
-#include "dxMuJoCoWindow.h"
 #include "dxPlannerSimple.h"
 
-demo::demo(const std::string& modelPath, bool createViewer)
-    : mSim(std::make_shared<dxRobotSimulator>(modelPath, createViewer))
+demo::demo(dxMuJoCoRobotSimulator* simulator, QObject* parent)
+    : QObject(parent), mSim(simulator)
 {
+    mTrajectoryTimer = new QTimer(this);
+    mTrajectoryTimer->setInterval(20);
+    connect(mTrajectoryTimer, &QTimer::timeout, this, [this]()
+    {
+        if (mTrajectoryIndex >= mTrajectory.size())
+        {
+            mTrajectoryTimer->stop();
+            return;
+        }
+
+        const std::vector<double>& joints = mTrajectory[mTrajectoryIndex++];
+        emit jointPositionsReady(joints);
+        emit ctrlTargetsFromJointsReady(joints);
+    });
 }
 
-// Initialize the simulator and cache a kinematics helper for FK/IK queries.
+// Initialize kinematics helper after the simulator has a model loaded.
 bool demo::init()
 {
-    if (!mSim || !mSim->init())
+    if (!mSim || !mSim->model())
     {
         return false;
     }
 
-    mKin = std::make_unique<dxKinMuJoCo>(mSim->model(), mSim->data());
-    mHasLastEePoint = false;
+    mKin = std::make_unique<dxKinMuJoCo>(mSim->model(), nullptr);
     return true;
 }
 
-void demo::reset()
+void demo::startTrajectoryPlayback()
 {
-    if (mSim)
-    {
-        mSim->reset();
-    }
-}
-
-// Apply queued trajectory waypoints or manual target commands to the simulator.
-void demo::update()
-{
-    if (!mSim)
+    if (!mTrajectoryTimer)
     {
         return;
     }
-
-    {
-        std::lock_guard<std::mutex> lock(mTrajectoryMutex);
-        if (mHasTrajectory && mTrajectoryIndex < mTrajectory.size())
-        {
-            // Execute one planned waypoint per update tick (on the UI thread).
-            const std::vector<double>& joints = mTrajectory[mTrajectoryIndex++];
-            mSim->setQposFromJointPositions(joints);
-            // Keep controls aligned with qpos to avoid drift after direct state edits.
-            mSim->setCtrlTargetsFromJointPositions(joints);
-            if (mTrajectoryIndex >= mTrajectory.size())
-            {
-                mHasTrajectory = false;
-            }
-            return;
-        }
-    }
-
-    if (!mHasTarget)
+    if (mTrajectory.empty())
     {
         return;
     }
-
-    std::array<double, 6> joints;
+    mTrajectoryIndex = 0;
+    if (!mTrajectoryTimer->isActive())
     {
-        std::lock_guard<std::mutex> lock(mTargetMutex);
-        joints = mTargetJoints;
+        mTrajectoryTimer->start();
     }
-
-    std::vector<double> targets(joints.begin(), joints.end());
-    mSim->setCtrlTargets(targets);
-}
-
-void demo::step(int steps)
-{
-    if (!mSim)
-    {
-        return;
-    }
-
-    mSim->step(steps);
-
-    if (mViewer)
-    {
-        std::vector<std::array<double, 3>> plannedPath;
-        {
-            std::lock_guard<std::mutex> lock(mPlannedMutex);
-            if (mHasPlannedPath)
-            {
-                plannedPath = mPlannedPath;
-                mPlannedPath.clear();
-                mHasPlannedPath = false;
-            }
-        }
-
-        if (!plannedPath.empty())
-        {
-            mViewer->setPlannedPath(plannedPath);
-            mViewer->clearExecutedPath();
-            mHasLastEePoint = false;
-        }
-
-        if (mKin)
-        {
-            dxKinMuJoCo::PoseResult fkResult;
-            if (mKin->getFKCurrent(fkResult))
-            {
-                const Eigen::Matrix4f& pose = std::get<1>(fkResult);
-                std::array<double, 3> pos =
-                {
-                    static_cast<double>(pose(0, 3)),
-                    static_cast<double>(pose(1, 3)),
-                    static_cast<double>(pose(2, 3))
-                };
-                if (!mHasLastEePoint)
-                {
-                    mViewer->addExecutedPoint(pos);
-                    mHasLastEePoint = true;
-                    mLastEePoint = pos;
-                }
-                else
-                {
-                    const double dx = pos[0] - mLastEePoint[0];
-                    const double dy = pos[1] - mLastEePoint[1];
-                    const double dz = pos[2] - mLastEePoint[2];
-                    if ((dx * dx + dy * dy + dz * dz) > 1e-8)
-                    {
-                        mViewer->addExecutedPoint(pos);
-                        mLastEePoint = pos;
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Run the viewer-driven simulation loop (headless runs should call update/step manually).
-void demo::run(int stepsPerFrame)
-{
-    if (!mSim || !mSim->viewer())
-    {
-        return;
-    }
-
-    if (stepsPerFrame < 1)
-    {
-        stepsPerFrame = 1;
-    }
-
-    while (mSim->viewer() && !mSim->viewer()->shouldClose())
-    {
-        update();
-        step(stepsPerFrame);
-        mSim->viewer()->renderOnce();
-    }
-}
-
-// Set a joint-space target for the robot (optionally including gripper joints).
-void demo::moveRobotToJointPos(const std::vector<double>& jointsRad, bool includeGripper)
-{
-    if (!mSim || !mSim->model() || jointsRad.empty())
-    {
-        return;
-    }
-    const int dof = includeGripper ? mSim->model()->nq : (mKin ? mKin->getDoF() : mSim->model()->nq);
-    if (dof <= 0)
-    {
-        return;
-    }
-    std::lock_guard<std::mutex> lock(mTargetMutex);
-    const int limit = std::min(dof, static_cast<int>(jointsRad.size()));
-    for (int i = 0; i < limit; ++i)
-    {
-        mTargetJoints[i] = jointsRad[i];
-    }
-    mHasTarget = true;
-}
-
-// Fire-and-forget demo that linearly interpolates to a hardcoded joint target.
-void demo::test()
-{
-    std::thread([this]()
-    {
-        std::cout << "Press Enter to start trajectory..." << std::endl;
-        std::string line;
-        std::getline(std::cin, line);
-
-        const std::array<double, 6> target = {0.35, -1.2, 1.4, -1.3, -1.57, 0.25};
-
-        std::array<double, 6> start = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
-        if (mSim)
-        {
-            const std::vector<double> ctrl = mSim->getCtrl();
-            for (int i = 0; i < 6 && i < static_cast<int>(ctrl.size()); ++i)
-            {
-                start[i] = ctrl[i];
-            }
-        }
-
-        auto lerp = [](double a, double b, double t)
-        {
-            return a + (b - a) * t;
-        };
-
-        const int totalSteps = 200;
-        const auto latency = std::chrono::milliseconds(5);
-        for (int i = 0; i <= totalSteps; ++i)
-        {
-            const double t = static_cast<double>(i) / static_cast<double>(totalSteps);
-            std::array<double, 6> joints;
-            for (int j = 0; j < 6; ++j)
-            {
-                joints[j] = lerp(start[j], target[j], t);
-            }
-
-            moveRobotToJointPos(std::vector<double>(joints.begin(), joints.end()));
-            std::this_thread::sleep_for(latency);
-        }
-    }).detach();
 }
 
 // Validate FK/IK by computing the current pose and attempting to solve IK back to it.
 void demo::testKinematics()
 {
-    if (!mSim || !mSim->model() || !mSim->data())
+    if (!mSim || !mSim->model())
     {
         std::cout << "[testKinematics] simulator not initialized." << std::endl;
         return;
     }
 
-    dxKinMuJoCo kin(mSim->model(), mSim->data());
+    dxKinMuJoCo kin(mSim->model(), nullptr);
+    const dxMuJoCoRobotState state = mSim->getRobotState();
 
     dxKinMuJoCo::PoseResult fkResult;
-    const std::vector<double> qpos = mSim->getQpos();
-    if (!kin.getFK(qpos, fkResult))
+    if (!kin.getFK(state.qpos, fkResult))
     {
         std::cout << "[testKinematics] FK failed." << std::endl;
         return;
@@ -266,7 +97,7 @@ void demo::testKinematics()
     };
 
     std::vector<double> solution;
-    const bool ikOk = kin.getIK(qpos, target, solution);
+    const bool ikOk = kin.getIK(state.qpos, target, solution);
 
     std::cout << std::fixed << std::setprecision(6);
     std::cout << "[testKinematics] FK pos: "
@@ -275,115 +106,16 @@ void demo::testKinematics()
               << ", solution size: " << solution.size() << std::endl;
 }
 
-// Legacy planner test: uses the planner API and queues the resulting trajectory.
-void demo::testPlanner()
-{
-    if (!mSim || !mSim->model() || !mSim->data())
-    {
-        std::cout << "[testPlanner] simulator not initialized." << std::endl;
-        return;
-    }
-
-    dxKinMuJoCo kin(mSim->model(), mSim->data());
-    dxPlannerSimple planner(&kin);
-    if (!planner.init())
-    {
-        std::cout << "[testPlanner] planner init failed." << std::endl;
-        return;
-    }
-
-    dxKinMuJoCo::PoseResult fkResult;
-    if (!kin.getFKCurrent(fkResult))
-    {
-        std::cout << "[testPlanner] FK current failed." << std::endl;
-        return;
-    }
-
-    std::vector<double> start = std::get<2>(fkResult);
-    if (start.empty())
-    {
-        std::cout << "[testPlanner] empty joint state." << std::endl;
-        return;
-    }
-
-    const double delta = 25.0 * 3.141592653589793 / 180.0;
-    std::vector<double> goal = start;
-    int dof = kin.getDoF();
-    if (dof > 7)
-    {
-        dof = 6;
-    }
-    const int limit = std::min(dof, static_cast<int>(goal.size()));
-    for (int i = 0; i < limit; ++i)
-    {
-        goal[static_cast<size_t>(i)] += delta;
-    }
-
-    dxPlannerSimple::Params params;
-    params.steps = 200;
-    params.debugPaths = true;
-    planner.setParams(params);
-    planner.setStart(start);
-    planner.setGoal(goal);
-
-    if (!planner.solve())
-    {
-        std::cout << "[testPlanner] joint planning failed." << std::endl;
-        return;
-    }
-
-    std::vector<std::vector<double>> trajectory = planner.buildTrajectory();
-    if (trajectory.empty())
-    {
-        std::cout << "[testPlanner] joint planning failed." << std::endl;
-        return;
-    }
-
-    if (params.debugPaths)
-    {
-        std::vector<std::array<double, 3>> plannedPath;
-        plannedPath.reserve(trajectory.size());
-        for (const auto& point : trajectory)
-        {
-            dxKinMuJoCo::PoseResult fkPlanned;
-            if (!kin.getFK(point, fkPlanned))
-            {
-                continue;
-            }
-
-            const Eigen::Matrix4f& pose = std::get<1>(fkPlanned);
-            plannedPath.push_back({{
-                    static_cast<double>(pose(0, 3)),
-                    static_cast<double>(pose(1, 3)),
-                    static_cast<double>(pose(2, 3))
-                }});
-        }
-
-        {
-            std::lock_guard<std::mutex> lock(mPlannedMutex);
-            mPlannedPath = std::move(plannedPath);
-            mHasPlannedPath = !mPlannedPath.empty();
-        }
-    }
-
-    {
-        std::lock_guard<std::mutex> lock(mTrajectoryMutex);
-        mTrajectory = trajectory;
-        mTrajectoryIndex = 0;
-        mHasTrajectory = !mTrajectory.empty();
-    }
-}
-
 // Simplified planner test: start from current state, add +25 deg to arm joints, then execute.
 void demo::testPlannerSimple()
 {
-    if (!mSim || !mSim->model() || !mSim->data())
+    if (!mSim || !mSim->model())
     {
         std::cout << "[testPlannerSimple] simulator not initialized." << std::endl;
         return;
     }
 
-    dxKinMuJoCo kin(mSim->model(), mSim->data());
+    dxKinMuJoCo kin(mSim->model(), nullptr);
     dxPlannerSimple planner(&kin);
     if (!planner.init())
     {
@@ -391,44 +123,31 @@ void demo::testPlannerSimple()
         return;
     }
 
-    dxKinMuJoCo::PoseResult fkResult;
-    if (!kin.getFKCurrent(fkResult))
-    {
-        std::cout << "[testPlannerSimple] FK current failed." << std::endl;
-        return;
-    }
-
-    std::vector<double> start = std::get<2>(fkResult);
+    const dxMuJoCoRobotState state = mSim->getRobotState();
+    std::vector<double> start = kin.getDofQpos(state.qpos);
     if (start.empty())
     {
         std::cout << "[testPlannerSimple] empty joint state." << std::endl;
         return;
     }
 
-    // Step 1/2: set start (current joint state) and compute goal (start + 25 deg per arm joint).
     planner.setStart(start);
 
     const double delta = 25.0 * 3.141592653589793 / 180.0;
     std::vector<double> goal = start;
-    int dof = kin.getDoF();
-    if (dof > 7)
-    {
-        dof = 6;
-    }
+    const int dof = static_cast<int>(start.size());
     const int limit = std::min(dof, static_cast<int>(goal.size()));
-    for (int i = 0; i < limit; ++i)
+    for (int i = 0; i < 6; ++i)
     {
-        goal[static_cast<size_t>(i)] += delta;
+        goal[i] += delta;
     }
     planner.setGoal(goal);
 
-    // Step 3: planner parameters (steps + optional debug path visualization).
     dxPlannerSimple::Params params;
     params.steps = 200;
-    params.debugPaths = true;
+    params.debugPaths = false;
     planner.setParams(params);
 
-    // Step 4/5: solve and obtain the joint-space path.
     if (!planner.solve())
     {
         std::cout << "[testPlannerSimple] joint planning failed." << std::endl;
@@ -442,58 +161,34 @@ void demo::testPlannerSimple()
         return;
     }
 
-    // Step 6: build a trajectory (currently a pass-through of the planned path).
-    std::vector<std::vector<double>> trajectory = planner.buildTrajectory(path);
-    if (trajectory.empty())
+    mTrajectory = planner.buildTrajectory(path);
+    if (mTrajectory.empty())
     {
         std::cout << "[testPlannerSimple] empty trajectory." << std::endl;
         return;
     }
 
-    if (params.debugPaths)
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "[testPlannerSimple] start (deg): ";
+    for (size_t i = 0; i < start.size(); ++i)
     {
-        std::vector<std::array<double, 3>> plannedPath;
-        plannedPath.reserve(trajectory.size());
-        for (const auto& point : trajectory)
+        if (i > 0)
         {
-            dxKinMuJoCo::PoseResult fkPlanned;
-            if (!kin.getFK(point, fkPlanned))
-            {
-                continue;
-            }
-
-            const Eigen::Matrix4f& pose = std::get<1>(fkPlanned);
-            plannedPath.push_back({{
-                    static_cast<double>(pose(0, 3)),
-                    static_cast<double>(pose(1, 3)),
-                    static_cast<double>(pose(2, 3))
-                }});
+            std::cout << ", ";
         }
-
+        std::cout << (start[i] * 180.0 / 3.141592653589793);
+    }
+    std::cout << std::endl;
+    std::cout << "[testPlannerSimple] goal  (deg): ";
+    for (size_t i = 0; i < goal.size(); ++i)
+    {
+        if (i > 0)
         {
-            std::lock_guard<std::mutex> lock(mPlannedMutex);
-            mPlannedPath = std::move(plannedPath);
-            mHasPlannedPath = !mPlannedPath.empty();
+            std::cout << ", ";
         }
+        std::cout << (goal[i] * 180.0 / 3.141592653589793);
     }
+    std::cout << std::endl;
 
-    // Step 7: enqueue the trajectory; demo::update() applies one waypoint per tick.
-    {
-        std::lock_guard<std::mutex> lock(mTrajectoryMutex);
-        mTrajectory = trajectory;
-        mTrajectoryIndex = 0;
-        mHasTrajectory = !mTrajectory.empty();
-    }
-}
-
-// Attach the viewer so planned/executed paths can be visualized during updates.
-void demo::setViewer(dxMuJoCoWindow* viewer)
-{
-    mViewer = viewer;
-    if (mViewer)
-    {
-        mViewer->setPlannedPath({});
-        mViewer->clearExecutedPath();
-    }
-    mHasLastEePoint = false;
+    startTrajectoryPlayback();
 }

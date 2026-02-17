@@ -26,6 +26,8 @@ public:
 
     int getDoF() const;
 
+    std::vector<double> getDofQpos(const std::vector<double>& qpos) const;
+
     bool getFK(const std::vector<double>& qpos, PoseResult& out);
 
     bool getFKCurrent(PoseResult& out) const;

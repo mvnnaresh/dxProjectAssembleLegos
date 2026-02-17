@@ -1,12 +1,14 @@
-#include "dxMuJoCoWindow.h"
+#include "dxMuJoCoRobotViewer.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 #include <QMouseEvent>
-#include <QWheelEvent>
 #include <QOpenGLFunctions>
+#include <QWheelEvent>
 
-dxMuJoCoWindow::dxMuJoCoWindow(QWindow* parent)
+dxMuJoCoRobotViewer::dxMuJoCoRobotViewer(QWindow* parent)
     : QOpenGLWindow(NoPartialUpdate, parent)
 {
     mjv_defaultCamera(&mCam);
@@ -15,13 +17,13 @@ dxMuJoCoWindow::dxMuJoCoWindow(QWindow* parent)
     mjr_defaultContext(&mCon);
 }
 
-dxMuJoCoWindow::~dxMuJoCoWindow()
+dxMuJoCoRobotViewer::~dxMuJoCoRobotViewer()
 {
     shutdownVisuals();
     shutdownModel();
 }
 
-bool dxMuJoCoWindow::loadModel(const std::string& modelPath)
+bool dxMuJoCoRobotViewer::loadModel(const std::string& modelPath)
 {
     mModelPath = modelPath;
     shutdownModel();
@@ -30,7 +32,7 @@ bool dxMuJoCoWindow::loadModel(const std::string& modelPath)
     mModel = mj_loadXML(modelPath.c_str(), nullptr, err, sizeof(err));
     if (!mModel)
     {
-        std::fprintf(stderr, "dxMuJoCoWindow: mj_loadXML failed for '%s'\nError: %s\n",
+        std::fprintf(stderr, "dxMuJoCoRobotViewer: mj_loadXML failed for '%s'\nError: %s\n",
                      modelPath.c_str(), err);
         return false;
     }
@@ -38,12 +40,13 @@ bool dxMuJoCoWindow::loadModel(const std::string& modelPath)
     mData = mj_makeData(mModel);
     if (!mData)
     {
-        std::fprintf(stderr, "dxMuJoCoWindow: mj_makeData failed.\n");
+        std::fprintf(stderr, "dxMuJoCoRobotViewer: mj_makeData failed.\n");
         shutdownModel();
         return false;
     }
 
-    mOwnsModelData = true;
+    mOwnsModel = true;
+    mOwnsData = true;
     mj_forward(mModel, mData);
 
     mNeedsVisualInit = true;
@@ -51,22 +54,30 @@ bool dxMuJoCoWindow::loadModel(const std::string& modelPath)
     return true;
 }
 
-void dxMuJoCoWindow::setModel(mjModel* model, mjData* data, bool ownsModelData)
+void dxMuJoCoRobotViewer::setModel(mjModel* model)
 {
     shutdownModel();
     mModel = model;
-    mData = data;
-    mOwnsModelData = ownsModelData;
-    if (mModel && mData)
+    if (mModel)
     {
-        mj_forward(mModel, mData);
+        mData = mj_makeData(mModel);
     }
+    if (!mData)
+    {
+        mModel = nullptr;
+        mOwnsModel = false;
+        mOwnsData = false;
+        return;
+    }
+    mOwnsModel = false;
+    mOwnsData = true;
+    mj_forward(mModel, mData);
 
     mNeedsVisualInit = true;
     update();
 }
 
-void dxMuJoCoWindow::reset()
+void dxMuJoCoRobotViewer::reset()
 {
     if (!mModel || !mData)
     {
@@ -77,7 +88,7 @@ void dxMuJoCoWindow::reset()
     update();
 }
 
-void dxMuJoCoWindow::setPlannedPath(const std::vector<std::array<double, 3>>& points)
+void dxMuJoCoRobotViewer::setPlannedPath(const std::vector<std::array<double, 3>>& points)
 {
     mPlannedPath = points;
     if (mPlannedPath.size() > mMaxPathPoints)
@@ -87,13 +98,13 @@ void dxMuJoCoWindow::setPlannedPath(const std::vector<std::array<double, 3>>& po
     update();
 }
 
-void dxMuJoCoWindow::clearExecutedPath()
+void dxMuJoCoRobotViewer::clearExecutedPath()
 {
     mExecutedPath.clear();
     update();
 }
 
-void dxMuJoCoWindow::addExecutedPoint(const std::array<double, 3>& point)
+void dxMuJoCoRobotViewer::addExecutedPoint(const std::array<double, 3>& point)
 {
     if (!mExecutedPath.empty())
     {
@@ -113,9 +124,41 @@ void dxMuJoCoWindow::addExecutedPoint(const std::array<double, 3>& point)
     {
         mExecutedPath.erase(mExecutedPath.begin(), mExecutedPath.begin() + (mExecutedPath.size() - mMaxPathPoints));
     }
+    update();
 }
 
-void dxMuJoCoWindow::initializeGL()
+void dxMuJoCoRobotViewer::applyState(const dxMuJoCoRobotState& state)
+{
+    if (!mModel || !mData)
+    {
+        return;
+    }
+    if (static_cast<int>(state.qpos.size()) == mModel->nq)
+    {
+        for (int i = 0; i < mModel->nq; ++i)
+        {
+            mData->qpos[i] = state.qpos[static_cast<size_t>(i)];
+        }
+    }
+    if (static_cast<int>(state.qvel.size()) == mModel->nv)
+    {
+        for (int i = 0; i < mModel->nv; ++i)
+        {
+            mData->qvel[i] = state.qvel[static_cast<size_t>(i)];
+        }
+    }
+    if (static_cast<int>(state.ctrl.size()) == mModel->nu)
+    {
+        for (int i = 0; i < mModel->nu; ++i)
+        {
+            mData->ctrl[i] = state.ctrl[static_cast<size_t>(i)];
+        }
+    }
+    mj_forward(mModel, mData);
+    update();
+}
+
+void dxMuJoCoRobotViewer::initializeGL()
 {
     if (mModel)
     {
@@ -123,7 +166,7 @@ void dxMuJoCoWindow::initializeGL()
     }
 }
 
-void dxMuJoCoWindow::paintGL()
+void dxMuJoCoRobotViewer::paintGL()
 {
     if (!mModel || !mData)
     {
@@ -144,8 +187,6 @@ void dxMuJoCoWindow::paintGL()
         f->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
 
-    mj_forward(mModel, mData);
-
     const int w = width() * devicePixelRatio();
     const int h = height() * devicePixelRatio();
     mjrRect viewport = { 0, 0, w, h };
@@ -158,14 +199,14 @@ void dxMuJoCoWindow::paintGL()
     mjr_render(viewport, &mScn, &mCon);
 }
 
-void dxMuJoCoWindow::resizeGL(int w, int h)
+void dxMuJoCoRobotViewer::resizeGL(int w, int h)
 {
     Q_UNUSED(w);
     Q_UNUSED(h);
     update();
 }
 
-void dxMuJoCoWindow::mousePressEvent(QMouseEvent* event)
+void dxMuJoCoRobotViewer::mousePressEvent(QMouseEvent* event)
 {
     if (!event)
     {
@@ -188,7 +229,7 @@ void dxMuJoCoWindow::mousePressEvent(QMouseEvent* event)
     mLastY = p.y();
 }
 
-void dxMuJoCoWindow::mouseReleaseEvent(QMouseEvent* event)
+void dxMuJoCoRobotViewer::mouseReleaseEvent(QMouseEvent* event)
 {
     if (!event)
     {
@@ -208,7 +249,7 @@ void dxMuJoCoWindow::mouseReleaseEvent(QMouseEvent* event)
     }
 }
 
-void dxMuJoCoWindow::mouseMoveEvent(QMouseEvent* event)
+void dxMuJoCoRobotViewer::mouseMoveEvent(QMouseEvent* event)
 {
     if (!event || !mModel || !mVisualsReady)
     {
@@ -254,7 +295,7 @@ void dxMuJoCoWindow::mouseMoveEvent(QMouseEvent* event)
     update();
 }
 
-void dxMuJoCoWindow::wheelEvent(QWheelEvent* event)
+void dxMuJoCoRobotViewer::wheelEvent(QWheelEvent* event)
 {
     if (!event || !mModel || !mVisualsReady)
     {
@@ -268,7 +309,7 @@ void dxMuJoCoWindow::wheelEvent(QWheelEvent* event)
     update();
 }
 
-void dxMuJoCoWindow::initVisuals()
+void dxMuJoCoRobotViewer::initVisuals()
 {
     if (!mModel)
     {
@@ -298,7 +339,7 @@ void dxMuJoCoWindow::initVisuals()
     mNeedsVisualInit = false;
 }
 
-void dxMuJoCoWindow::appendPathGeoms(const std::vector<std::array<double, 3>>& points, const float rgba[4])
+void dxMuJoCoRobotViewer::appendPathGeoms(const std::vector<std::array<double, 3>>& points, const float rgba[4])
 {
     if (points.empty())
     {
@@ -338,7 +379,7 @@ void dxMuJoCoWindow::appendPathGeoms(const std::vector<std::array<double, 3>>& p
     }
 }
 
-void dxMuJoCoWindow::shutdownVisuals()
+void dxMuJoCoRobotViewer::shutdownVisuals()
 {
     if (!mVisualsReady)
     {
@@ -349,22 +390,18 @@ void dxMuJoCoWindow::shutdownVisuals()
     mVisualsReady = false;
 }
 
-void dxMuJoCoWindow::shutdownModel()
+void dxMuJoCoRobotViewer::shutdownModel()
 {
-    if (!mOwnsModelData)
-    {
-        return;
-    }
-
-    if (mData)
+    if (mData && mOwnsData)
     {
         mj_deleteData(mData);
-        mData = nullptr;
     }
-    if (mModel)
+    if (mModel && mOwnsModel)
     {
         mj_deleteModel(mModel);
-        mModel = nullptr;
     }
-    mOwnsModelData = false;
+    mData = nullptr;
+    mModel = nullptr;
+    mOwnsData = false;
+    mOwnsModel = false;
 }

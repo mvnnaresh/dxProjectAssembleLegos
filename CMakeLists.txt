@@ -88,12 +88,11 @@ endif()
 
 
 add_executable(dxProjectAssembleLegos main.cpp
-    dxRobotViewerFactory.cpp
-    dxRobotViewerFactory.h
     demo.cpp
     demo.h
-    dxRobotSimulator.cpp
-    dxRobotSimulator.h
+    dxMuJoCoRobotSimulator.cpp
+    dxMuJoCoRobotSimulator.h
+    dxMuJoCoRobotState.h
     dxKinMuJoCo.cpp
     dxKinMuJoCo.h
     dxPlannerSimple.cpp
@@ -101,8 +100,8 @@ add_executable(dxProjectAssembleLegos main.cpp
 	mainwindow.h
 	mainwindow.cpp
 	mainwindow.ui
-    dxMuJoCoWindow.h
-    dxMuJoCoWindow.cpp)
+    dxMuJoCoRobotViewer.h
+    dxMuJoCoRobotViewer.cpp)
 
 target_include_directories(dxProjectAssembleLegos PRIVATE
   ${Boost_INCLUDE_DIRS}
