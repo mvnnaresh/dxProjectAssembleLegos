@@ -28,8 +28,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
     QVBoxLayout* dockLayout = new QVBoxLayout(dockWidget);
     QPushButton* initButton = new QPushButton("Init", dockWidget);
     QPushButton* testButton = new QPushButton("Test Planner", dockWidget);
+    QPushButton* cartButton = new QPushButton("Test Cartesian", dockWidget);
     dockLayout->addWidget(initButton);
     dockLayout->addWidget(testButton);
+    dockLayout->addWidget(cartButton);
     dockLayout->addStretch(1);
     dockWidget->setLayout(dockLayout);
     dock->setWidget(dockWidget);
@@ -57,6 +59,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
                     mSim, &dxMuJoCoRobotSimulator::setCtrlTargetsFromJointPositions, Qt::QueuedConnection);
             connect(mDemo.get(), &demo::drawTrajectory,
                     mViewer, &dxMuJoCoRobotViewer::drawTrajectory);
+            connect(mDemo.get(), &demo::closeGripperRequested,
+                    mSim, &dxMuJoCoRobotSimulator::closeGripper, Qt::QueuedConnection);
         }
         QMetaObject::invokeMethod(mSim, "loadModel", Qt::QueuedConnection,
                                   Q_ARG(QString, QString::fromStdString(mModelPath)));
@@ -68,6 +72,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
         if (mDemo)
         {
             mDemo->testPlannerSimple();
+        }
+    });
+
+    connect(cartButton, &QPushButton::clicked, this, [this]()
+    {
+        if (mDemo)
+        {
+            mDemo->testPlannerCartesian();
         }
     });
 

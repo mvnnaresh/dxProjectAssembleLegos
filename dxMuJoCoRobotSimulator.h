@@ -43,6 +43,11 @@ public slots:
     void setCtrlTargets(const std::vector<double>& targets);
     void setCtrlTargetsFromJointPositions(const std::vector<double>& jointPositions);
     void setJointPositions(const std::vector<double>& jointPositions);
+    void closeGripper();
+    void setPdGains(double kp, double kd);
+    void enablePdHold(bool enabled);
+    void enableHardLock(bool enabled);
+    void lockCurrentPose();
 
 signals:
     void modelLoaded(mjModel* model);
@@ -70,6 +75,8 @@ private:
     void applyCtrlTargetsDirect(const std::vector<double>& targets);
     void applyCtrlTargetsFromJointPositionsDirect(const std::vector<double>& jointPositions);
     void applyJointPositionsDirect(const std::vector<double>& jointPositions);
+    void applyPdHoldFromJointTargets(const std::vector<double>& jointPositions);
+    std::vector<int> getTendonActuatorIndices() const;
     void updateStateSnapshot();
     std::vector<double> extractJointPositions() const;
 
@@ -85,6 +92,10 @@ private:
     HoldMode mHoldMode = HoldMode::HoldJointTargets;
     std::vector<double> mHoldJointTargets;
     std::vector<double> mHoldCtrlTargets;
+    bool mEnablePdHold = true;
+    double mPdKp = 50.0;
+    double mPdKd = 5.0;
+    bool mEnableHardLock = true;
 
     QString mModelPath;
     bool mPoseApplied = false;

@@ -2,6 +2,7 @@
 
 #include <iomanip>
 #include <iostream>
+#include <unordered_set>
 
 #include "dxKinMuJoCo.h"
 #include "dxPlannerSimple.h"
@@ -16,6 +17,7 @@ demo::demo(dxMuJoCoRobotSimulator* simulator, QObject* parent)
         if (mTrajectoryIndex >= mTrajectory.size())
         {
             mTrajectoryTimer->stop();
+            applyGripperClose();
             return;
         }
 
@@ -34,6 +36,7 @@ bool demo::init()
     }
 
     mKin = std::make_unique<dxKinMuJoCo>(mSim->model(), nullptr);
+    buildDofGroups();
     return true;
 }
 
@@ -52,6 +55,87 @@ void demo::startTrajectoryPlayback()
     {
         mTrajectoryTimer->start();
     }
+}
+
+void demo::applyGripperClose()
+{
+    emit closeGripperRequested();
+}
+
+void demo::buildDofGroups()
+{
+    mArmDofIndices.clear();
+    mGripperDofIndices.clear();
+
+    if (!mSim || !mSim->model())
+    {
+        return;
+    }
+
+    mjModel* model = mSim->model();
+    std::vector<bool> jointActuated(static_cast<size_t>(model->njnt), false);
+    for (int aid = 0; aid < model->nu; ++aid)
+    {
+        if (model->actuator_trntype[aid] != mjTRN_JOINT)
+        {
+            continue;
+        }
+        const int jid = model->actuator_trnid[2 * aid];
+        if (jid >= 0 && jid < model->njnt)
+        {
+            jointActuated[static_cast<size_t>(jid)] = true;
+        }
+    }
+
+    int dofIndex = 0;
+    for (int jid = 0; jid < model->njnt; ++jid)
+    {
+        const int type = model->jnt_type[jid];
+        if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
+        {
+            continue;
+        }
+
+        if (jointActuated[static_cast<size_t>(jid)])
+        {
+            mArmDofIndices.push_back(dofIndex);
+        }
+        else
+        {
+            mGripperDofIndices.push_back(dofIndex);
+        }
+        ++dofIndex;
+    }
+}
+
+std::vector<double> demo::extractArmDof(const std::vector<double>& dofQpos) const
+{
+    std::vector<double> out;
+    out.reserve(mArmDofIndices.size());
+    for (int idx : mArmDofIndices)
+    {
+        if (idx >= 0 && static_cast<size_t>(idx) < dofQpos.size())
+        {
+            out.push_back(dofQpos[static_cast<size_t>(idx)]);
+        }
+    }
+    return out;
+}
+
+std::vector<double> demo::expandArmDof(const std::vector<double>& baseDof,
+                                       const std::vector<double>& armDof) const
+{
+    std::vector<double> out = baseDof;
+    const size_t limit = std::min(mArmDofIndices.size(), armDof.size());
+    for (size_t i = 0; i < limit; ++i)
+    {
+        const int idx = mArmDofIndices[i];
+        if (idx >= 0 && static_cast<size_t>(idx) < out.size())
+        {
+            out[static_cast<size_t>(idx)] = armDof[i];
+        }
+    }
+    return out;
 }
 
 // Validate FK/IK by computing the current pose and attempting to solve IK back to it.
@@ -124,10 +208,17 @@ void demo::testPlannerSimple()
     }
 
     const dxMuJoCoRobotState state = mSim->getRobotState();
-    std::vector<double> start = kin.getDofQpos(state.qpos);
-    if (start.empty())
+    std::vector<double> startDof = kin.getDofQpos(state.qpos);
+    if (startDof.empty())
     {
         std::cout << "[testPlannerSimple] empty joint state." << std::endl;
+        return;
+    }
+
+    std::vector<double> start = extractArmDof(startDof);
+    if (start.empty())
+    {
+        std::cout << "[testPlannerSimple] empty arm joint state." << std::endl;
         return;
     }
 
@@ -161,7 +252,19 @@ void demo::testPlannerSimple()
         return;
     }
 
-    mTrajectory = planner.buildTrajectory(path);
+    const std::vector<std::vector<double>> armTrajectory = planner.buildTrajectory(path);
+    if (armTrajectory.empty())
+    {
+        std::cout << "[testPlannerSimple] empty trajectory." << std::endl;
+        return;
+    }
+
+    mTrajectory.clear();
+    mTrajectory.reserve(armTrajectory.size());
+    for (const auto& point : armTrajectory)
+    {
+        mTrajectory.push_back(expandArmDof(startDof, point));
+    }
     if (mTrajectory.empty())
     {
         std::cout << "[testPlannerSimple] empty trajectory." << std::endl;
@@ -192,5 +295,89 @@ void demo::testPlannerSimple()
     }
     std::cout << std::endl;
 
+    startTrajectoryPlayback();
+}
+
+// Cartesian planner test: move along +X while keeping orientation.
+void demo::testPlannerCartesian()
+{
+    if (!mSim || !mSim->model())
+    {
+        std::cout << "[testPlannerCartesian] simulator not initialized." << std::endl;
+        return;
+    }
+
+    dxKinMuJoCo kin(mSim->model(), nullptr);
+    dxPlannerSimple planner(&kin);
+    if (!planner.init())
+    {
+        std::cout << "[testPlannerCartesian] planner init failed." << std::endl;
+        return;
+    }
+
+    const dxMuJoCoRobotState state = mSim->getRobotState();
+    dxKinMuJoCo::PoseResult fkResult;
+    if (!kin.getFK(state.qpos, fkResult))
+    {
+        std::cout << "[testPlannerCartesian] FK current failed." << std::endl;
+        return;
+    }
+
+    const Eigen::Matrix4f& pose = std::get<1>(fkResult);
+    const std::array<double, 3> pos =
+    {
+        static_cast<double>(pose(0, 3)),
+        static_cast<double>(pose(1, 3)),
+        static_cast<double>(pose(2, 3))
+    };
+
+    double mat[9] =
+    {
+        static_cast<double>(pose(0, 0)), static_cast<double>(pose(0, 1)), static_cast<double>(pose(0, 2)),
+        static_cast<double>(pose(1, 0)), static_cast<double>(pose(1, 1)), static_cast<double>(pose(1, 2)),
+        static_cast<double>(pose(2, 0)), static_cast<double>(pose(2, 1)), static_cast<double>(pose(2, 2))
+    };
+    double quat[4] = { 1.0, 0.0, 0.0, 0.0 };
+    mju_mat2Quat(quat, mat);
+
+    std::vector<double> startPose =
+    {
+        pos[0], pos[1], pos[2],
+        quat[0], quat[1], quat[2], quat[3]
+    };
+    std::vector<double> goalPose = startPose;
+    goalPose[0] += 0.10;
+
+    const std::vector<double> seed = kin.getDofQpos(state.qpos);
+    if (seed.empty())
+    {
+        std::cout << "[testPlannerCartesian] empty seed." << std::endl;
+        return;
+    }
+
+    std::vector<std::vector<double>> trajectory;
+    const bool ok = planner.planCartesian(startPose, goalPose, seed, trajectory, 80);
+    if (!ok || trajectory.empty())
+    {
+        std::cout << "[testPlannerCartesian] cartesian planning failed." << std::endl;
+        return;
+    }
+
+    mTrajectory.clear();
+    mTrajectory.reserve(trajectory.size());
+    for (const auto& point : trajectory)
+    {
+        std::vector<double> full = point;
+        for (size_t i = 0; i < mGripperDofIndices.size(); ++i)
+        {
+            const int idx = mGripperDofIndices[i];
+            if (idx >= 0 && static_cast<size_t>(idx) < full.size() && static_cast<size_t>(idx) < seed.size())
+            {
+                full[static_cast<size_t>(idx)] = seed[static_cast<size_t>(idx)];
+            }
+        }
+        mTrajectory.push_back(std::move(full));
+    }
+    emit drawTrajectory(planner.getTrajAs3DPoints(mTrajectory));
     startTrajectoryPlayback();
 }

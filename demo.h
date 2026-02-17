@@ -23,6 +23,8 @@ public:
 
     void testPlannerSimple();
 
+    void testPlannerCartesian();
+
 signals:
     void ctrlTargetsReady(const std::vector<double>& targets);
 
@@ -31,9 +33,15 @@ signals:
     void ctrlTargetsFromJointsReady(const std::vector<double>& joints);
 
     void drawTrajectory(const std::vector<std::array<double, 3>>& points);
+    void closeGripperRequested();
 
 private:
     void startTrajectoryPlayback();
+    void applyGripperClose();
+    void buildDofGroups();
+    std::vector<double> extractArmDof(const std::vector<double>& dofQpos) const;
+    std::vector<double> expandArmDof(const std::vector<double>& baseDof,
+                                     const std::vector<double>& armDof) const;
 
     dxMuJoCoRobotSimulator* mSim = nullptr;
 
@@ -41,6 +49,8 @@ private:
 
     size_t mTrajectoryIndex = 0;
     QTimer* mTrajectoryTimer = nullptr;
+    std::vector<int> mArmDofIndices;
+    std::vector<int> mGripperDofIndices;
 
     std::unique_ptr<dxKinMuJoCo> mKin;
 };

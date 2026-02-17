@@ -148,6 +148,92 @@ void dxMuJoCoRobotSimulator::setJointPositions(const std::vector<double>& jointP
     mHoldMode = HoldMode::HoldJointTargets;
 }
 
+void dxMuJoCoRobotSimulator::setPdGains(double kp, double kd)
+{
+    if (kp < 0.0 || kd < 0.0)
+    {
+        return;
+    }
+    mPdKp = kp;
+    mPdKd = kd;
+}
+
+void dxMuJoCoRobotSimulator::enablePdHold(bool enabled)
+{
+    mEnablePdHold = enabled;
+}
+
+void dxMuJoCoRobotSimulator::enableHardLock(bool enabled)
+{
+    mEnableHardLock = enabled;
+}
+
+void dxMuJoCoRobotSimulator::lockCurrentPose()
+{
+    if (!mModel || !mData)
+    {
+        return;
+    }
+    const std::vector<double> joints = extractJointPositions();
+    if (joints.empty())
+    {
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(mTargetMutex);
+        mHoldJointTargets = joints;
+        mHoldMode = HoldMode::HoldJointTargets;
+    }
+    if (mEnableHardLock)
+    {
+        applyJointPositionsDirect(joints);
+        zero_qvel(mModel, mData);
+        mj_forward(mModel, mData);
+    }
+}
+
+void dxMuJoCoRobotSimulator::closeGripper()
+{
+    if (!mModel || !mData || mModel->nu <= 0)
+    {
+        return;
+    }
+
+    std::vector<double> targets;
+    targets.assign(mData->ctrl, mData->ctrl + mModel->nu);
+
+    const std::vector<int> tendonActuators = getTendonActuatorIndices();
+    if (tendonActuators.empty())
+    {
+        return;
+    }
+
+    for (int aid : tendonActuators)
+    {
+        if (aid < 0 || aid >= mModel->nu)
+        {
+            continue;
+        }
+        double target = 0.0;
+        if (mModel->actuator_ctrllimited[aid])
+        {
+            target = mModel->actuator_ctrlrange[2 * aid + 1];
+        }
+        else
+        {
+            target = 1.0;
+        }
+        targets[static_cast<size_t>(aid)] = target;
+    }
+
+    applyCtrlTargetsDirect(targets);
+    updateStateSnapshot();
+
+    std::lock_guard<std::mutex> lock(mTargetMutex);
+    mHoldCtrlTargets = targets;
+    mHoldMode = HoldMode::HoldCtrlTargets;
+}
+
 void dxMuJoCoRobotSimulator::loadModel(const QString& modelPath)
 {
     stop();
@@ -294,7 +380,19 @@ void dxMuJoCoRobotSimulator::stepLoop()
         {
             if (mModel->nu > 0)
             {
-                applyCtrlTargetsFromJointPositionsDirect(holdJoints);
+                if (mEnableHardLock)
+                {
+                    applyJointPositionsDirect(holdJoints);
+                    zero_qvel(mModel, mData);
+                }
+                else if (mEnablePdHold)
+                {
+                    applyPdHoldFromJointTargets(holdJoints);
+                }
+                else
+                {
+                    applyCtrlTargetsFromJointPositionsDirect(holdJoints);
+                }
             }
             else
             {
@@ -437,6 +535,80 @@ void dxMuJoCoRobotSimulator::applyJointPositionsDirect(const std::vector<double>
         ++jointIndex;
     }
     mj_forward(mModel, mData);
+}
+
+void dxMuJoCoRobotSimulator::applyPdHoldFromJointTargets(const std::vector<double>& jointPositions)
+{
+    if (!mModel || !mData || jointPositions.empty())
+    {
+        return;
+    }
+
+    std::vector<int> jointOrder(static_cast<size_t>(mModel->njnt), -1);
+    int orderIndex = 0;
+    for (int jid = 0; jid < mModel->njnt; ++jid)
+    {
+        const int type = mModel->jnt_type[jid];
+        if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
+        {
+            continue;
+        }
+        jointOrder[jid] = orderIndex++;
+    }
+
+    for (int aid = 0; aid < mModel->nu; ++aid)
+    {
+        if (mModel->actuator_trntype[aid] != mjTRN_JOINT)
+        {
+            continue;
+        }
+        const int jid = mModel->actuator_trnid[2 * aid];
+        if (jid < 0 || jid >= mModel->njnt)
+        {
+            continue;
+        }
+        const int idx = jointOrder[jid];
+        if (idx < 0 || idx >= static_cast<int>(jointPositions.size()))
+        {
+            continue;
+        }
+        const int qposAdr = mModel->jnt_qposadr[jid];
+        const int dofAdr = mModel->jnt_dofadr[jid];
+        if (qposAdr < 0 || qposAdr >= mModel->nq || dofAdr < 0 || dofAdr >= mModel->nv)
+        {
+            continue;
+        }
+
+        const double target = jointPositions[static_cast<size_t>(idx)];
+        const double qpos = mData->qpos[qposAdr];
+        const double qvel = mData->qvel[dofAdr];
+        double torque = (mPdKp * (target - qpos)) - (mPdKd * qvel);
+
+        if (mModel->actuator_ctrllimited[aid])
+        {
+            const double lo = mModel->actuator_ctrlrange[2 * aid];
+            const double hi = mModel->actuator_ctrlrange[2 * aid + 1];
+            torque = std::min(hi, std::max(lo, torque));
+        }
+        mData->ctrl[aid] = torque;
+    }
+}
+
+std::vector<int> dxMuJoCoRobotSimulator::getTendonActuatorIndices() const
+{
+    std::vector<int> indices;
+    if (!mModel)
+    {
+        return indices;
+    }
+    for (int aid = 0; aid < mModel->nu; ++aid)
+    {
+        if (mModel->actuator_trntype[aid] == mjTRN_TENDON)
+        {
+            indices.push_back(aid);
+        }
+    }
+    return indices;
 }
 
 void dxMuJoCoRobotSimulator::updateStateSnapshot()
