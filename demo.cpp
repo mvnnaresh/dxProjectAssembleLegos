@@ -28,13 +28,11 @@ demo::demo(dxMuJoCoRobotSimulator* simulator, QObject* parent)
             }
 
             const std::vector<double>& joints = mTrajectory.back();
-            emit jointPositionsReady(joints);
             emit ctrlTargetsFromJointsReady(joints);
             return;
         }
 
         const std::vector<double>& joints = mTrajectory[mTrajectoryIndex++];
-        emit jointPositionsReady(joints);
         emit ctrlTargetsFromJointsReady(joints);
     });
 }
@@ -418,6 +416,21 @@ void demo::testPlannerCartesian()
     }
     emit drawTrajectory(planner.getTrajAs3DPoints(mTrajectory));
     startTrajectoryPlayback();
+}
+
+void demo::closeGripper()
+{
+    setGripperPosition(1.0);
+}
+
+void demo::openGripper()
+{
+    setGripperPosition(0.0);
+}
+
+void demo::setGripperPosition(double ratio)
+{
+    emit gripperPositionRequested(ratio);
 }
 
 void demo::setEndBehavior(EndBehavior behavior)

@@ -118,11 +118,11 @@ void dxMuJoCoRobotViewer::applyState(const dxMuJoCoRobotState& state)
             mData->qvel[i] = state.qvel[static_cast<size_t>(i)];
         }
     }
-    if (static_cast<int>(state.ctrl.size()) == mModel->nu)
+    if (static_cast<int>(state.actuatorInput.size()) == mModel->nu)
     {
         for (int i = 0; i < mModel->nu; ++i)
         {
-            mData->ctrl[i] = state.ctrl[static_cast<size_t>(i)];
+            mData->ctrl[i] = state.actuatorInput[static_cast<size_t>(i)];
         }
     }
     mj_forward(mModel, mData);

@@ -31,6 +31,10 @@ public:
 
     void testPlannerCartesian();
 
+    void closeGripper();
+    void openGripper();
+    void setGripperPosition(double ratio);
+
     void setEndBehavior(EndBehavior behavior);
 
 signals:
@@ -42,6 +46,7 @@ signals:
 
     void drawTrajectory(const std::vector<std::array<double, 3>>& points);
     void closeGripperRequested();
+    void gripperPositionRequested(double ratio);
 
 private:
     void startTrajectoryPlayback();

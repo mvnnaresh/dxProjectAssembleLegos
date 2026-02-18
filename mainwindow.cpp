@@ -29,9 +29,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
     QPushButton* initButton = new QPushButton("Init", dockWidget);
     QPushButton* testButton = new QPushButton("Test Planner", dockWidget);
     QPushButton* cartButton = new QPushButton("Test Cartesian", dockWidget);
+    QPushButton* closeButton = new QPushButton("Close Gripper", dockWidget);
+    QPushButton* openButton = new QPushButton("Open Gripper", dockWidget);
+    QSlider* gripperSlider = new QSlider(Qt::Horizontal, dockWidget);
+    gripperSlider->setRange(0, 100);
+    gripperSlider->setValue(0);
     dockLayout->addWidget(initButton);
     dockLayout->addWidget(testButton);
     dockLayout->addWidget(cartButton);
+    dockLayout->addWidget(closeButton);
+    dockLayout->addWidget(openButton);
+    dockLayout->addWidget(gripperSlider);
     dockLayout->addStretch(1);
     dockWidget->setLayout(dockLayout);
     dock->setWidget(dockWidget);
@@ -61,6 +69,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
                     mViewer, &dxMuJoCoRobotViewer::drawTrajectory);
             connect(mDemo.get(), &demo::closeGripperRequested,
                     mSim, &dxMuJoCoRobotSimulator::closeGripper, Qt::QueuedConnection);
+            connect(mDemo.get(), &demo::gripperPositionRequested,
+                    mSim, &dxMuJoCoRobotSimulator::setGripperPosition, Qt::QueuedConnection);
+        }
+        if (mViewer)
+        {
+            mViewer->setModel(nullptr);
         }
         QMetaObject::invokeMethod(mSim, "loadModel", Qt::QueuedConnection,
                                   Q_ARG(QString, QString::fromStdString(mModelPath)));
@@ -80,6 +94,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
         if (mDemo)
         {
             mDemo->testPlannerCartesian();
+        }
+    });
+
+    connect(closeButton, &QPushButton::clicked, this, [this]()
+    {
+        if (mDemo)
+        {
+            mDemo->closeGripper();
+        }
+    });
+    connect(openButton, &QPushButton::clicked, this, [this]()
+    {
+        if (mDemo)
+        {
+            mDemo->openGripper();
+        }
+    });
+    connect(gripperSlider, &QSlider::valueChanged, this, [this](int value)
+    {
+        if (mDemo)
+        {
+            mDemo->setGripperPosition(static_cast<double>(value) / 100.0);
         }
     });
 

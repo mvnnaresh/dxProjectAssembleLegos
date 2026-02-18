@@ -73,7 +73,10 @@ void dxMuJoCoRobotSimulator::setCtrlTargets(const std::vector<double>& targets)
     mPendingCtrlTargets = targets;
     mHasCtrlTargets = true;
     mHoldCtrlTargets = targets;
-    mHoldMode = HoldMode::HoldCtrlTargets;
+    if (mHoldMode != HoldMode::HoldJointTargets || mHoldJointTargets.empty())
+    {
+        mHoldMode = HoldMode::HoldCtrlTargets;
+    }
 }
 
 void dxMuJoCoRobotSimulator::setCtrlByName(const std::string& actuatorName, double value)
@@ -110,7 +113,8 @@ void dxMuJoCoRobotSimulator::setCtrlTargetsFromJointPositions(const std::vector<
         jointOrder[jid] = orderIndex++;
     }
 
-    std::vector<double> targets(static_cast<size_t>(mModel->nu), 0.0);
+    std::vector<double> targets;
+    targets.assign(mData->ctrl, mData->ctrl + mModel->nu);
     for (int aid = 0; aid < mModel->nu; ++aid)
     {
         if (mModel->actuator_trntype[aid] != mjTRN_JOINT)
@@ -194,19 +198,32 @@ void dxMuJoCoRobotSimulator::lockCurrentPose()
 
 void dxMuJoCoRobotSimulator::closeGripper()
 {
+    setGripperPosition(1.0);
+}
+
+void dxMuJoCoRobotSimulator::setGripperPosition(double ratio)
+{
     if (!mModel || !mData || mModel->nu <= 0)
     {
         return;
     }
-
-    std::vector<double> targets;
-    targets.assign(mData->ctrl, mData->ctrl + mModel->nu);
-
     const std::vector<int> tendonActuators = getTendonActuatorIndices();
     if (tendonActuators.empty())
     {
         return;
     }
+
+    if (ratio < 0.0)
+    {
+        ratio = 0.0;
+    }
+    else if (ratio > 1.0)
+    {
+        ratio = 1.0;
+    }
+
+    std::vector<double> targets;
+    targets.assign(mData->ctrl, mData->ctrl + mModel->nu);
 
     for (int aid : tendonActuators)
     {
@@ -214,27 +231,39 @@ void dxMuJoCoRobotSimulator::closeGripper()
         {
             continue;
         }
-        double target = 0.0;
+        double target = ratio;
         if (mModel->actuator_ctrllimited[aid])
         {
-            target = mModel->actuator_ctrlrange[2 * aid + 1];
-        }
-        else
-        {
-            target = 1.0;
+            const double lo = mModel->actuator_ctrlrange[2 * aid];
+            const double hi = mModel->actuator_ctrlrange[2 * aid + 1];
+            target = lo + ratio * (hi - lo);
         }
         targets[static_cast<size_t>(aid)] = target;
     }
 
-    applyCtrlTargetsDirect(targets);
-    updateStateSnapshot();
-
     std::lock_guard<std::mutex> lock(mTargetMutex);
-    mHoldCtrlTargets = targets;
-    if (mHoldMode != HoldMode::HoldJointTargets || mHoldJointTargets.empty())
+    if (mHoldMode == HoldMode::HoldJointTargets && !mHoldJointTargets.empty())
     {
-        mHoldMode = HoldMode::HoldCtrlTargets;
+        for (int aid : tendonActuators)
+        {
+            if (aid < 0 || aid >= mModel->nu)
+            {
+                continue;
+            }
+            const char* name = mj_id2name(mModel, mjOBJ_ACTUATOR, aid);
+            if (!name)
+            {
+                continue;
+            }
+            mPendingNamedCtrls.emplace_back(name, targets[static_cast<size_t>(aid)]);
+        }
+        return;
     }
+
+    mPendingCtrlTargets = targets;
+    mHasCtrlTargets = true;
+    mHoldCtrlTargets = targets;
+    mHoldMode = HoldMode::HoldCtrlTargets;
 }
 
 void dxMuJoCoRobotSimulator::loadModel(const QString& modelPath)
@@ -360,10 +389,17 @@ void dxMuJoCoRobotSimulator::stepLoop()
         return;
     }
 
-    const bool hadPending = hasPendingTargets();
+    bool hadPending = false;
+    bool namedOnly = false;
+    {
+        std::lock_guard<std::mutex> lock(mTargetMutex);
+        const bool hasNamed = !mPendingNamedCtrls.empty();
+        hadPending = mHasCtrlTargets || mHasPendingQpos || hasNamed;
+        namedOnly = hasNamed && !mHasCtrlTargets && !mHasPendingQpos;
+    }
     applyPendingTargets();
 
-    if (!hadPending)
+    if (!hadPending || namedOnly)
     {
         HoldMode holdMode = HoldMode::None;
         std::vector<double> holdJoints;
@@ -385,7 +421,7 @@ void dxMuJoCoRobotSimulator::stepLoop()
             {
                 if (mEnableHardLock)
                 {
-                    applyJointPositionsDirect(holdJoints);
+                    applyJointPositionsDirect(holdJoints, true);
                     zero_qvel(mModel, mData);
                 }
                 else if (mEnablePdHold)
@@ -511,11 +547,46 @@ void dxMuJoCoRobotSimulator::applyCtrlTargetsFromJointPositionsDirect(const std:
     }
 }
 
-void dxMuJoCoRobotSimulator::applyJointPositionsDirect(const std::vector<double>& jointPositions)
+void dxMuJoCoRobotSimulator::applyJointPositionsDirect(const std::vector<double>& jointPositions, bool onlyActuated)
 {
     if (!mModel || !mData || jointPositions.empty())
     {
         return;
+    }
+
+    std::vector<char> actuated;
+    if (onlyActuated)
+    {
+        std::vector<int> jointOrder(static_cast<size_t>(mModel->njnt), -1);
+        int orderIndex = 0;
+        for (int jid = 0; jid < mModel->njnt; ++jid)
+        {
+            const int type = mModel->jnt_type[jid];
+            if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
+            {
+                continue;
+            }
+            jointOrder[jid] = orderIndex++;
+        }
+
+        actuated.assign(static_cast<size_t>(orderIndex), 0);
+        for (int aid = 0; aid < mModel->nu; ++aid)
+        {
+            if (mModel->actuator_trntype[aid] != mjTRN_JOINT)
+            {
+                continue;
+            }
+            const int jid = mModel->actuator_trnid[2 * aid];
+            if (jid < 0 || jid >= mModel->njnt)
+            {
+                continue;
+            }
+            const int idx = jointOrder[jid];
+            if (idx >= 0 && idx < static_cast<int>(actuated.size()))
+            {
+                actuated[static_cast<size_t>(idx)] = 1;
+            }
+        }
     }
 
     int jointIndex = 0;
@@ -533,7 +604,12 @@ void dxMuJoCoRobotSimulator::applyJointPositionsDirect(const std::vector<double>
         const int qposAdr = mModel->jnt_qposadr[jid];
         if (qposAdr >= 0 && qposAdr < mModel->nq)
         {
-            mData->qpos[qposAdr] = jointPositions[static_cast<size_t>(jointIndex)];
+            if (!onlyActuated ||
+                (jointIndex >= 0 && jointIndex < static_cast<int>(actuated.size()) &&
+                 actuated[static_cast<size_t>(jointIndex)]))
+            {
+                mData->qpos[qposAdr] = jointPositions[static_cast<size_t>(jointIndex)];
+            }
         }
         ++jointIndex;
     }
@@ -624,7 +700,7 @@ void dxMuJoCoRobotSimulator::updateStateSnapshot()
 
     snapshot.qpos.assign(mData->qpos, mData->qpos + mModel->nq);
     snapshot.qvel.assign(mData->qvel, mData->qvel + mModel->nv);
-    snapshot.ctrl.assign(mData->ctrl, mData->ctrl + mModel->nu);
+    snapshot.actuatorInput.assign(mData->ctrl, mData->ctrl + mModel->nu);
 
     int siteId = mj_name2id(mModel, mjOBJ_SITE, "tcp");
     if (siteId < 0)

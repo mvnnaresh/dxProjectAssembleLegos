@@ -325,6 +325,7 @@
     <exclude body1="wrist_3_link" body2="hande_right_finger"/>
     <exclude body1="hande" body2="hande_left_finger"/>
     <exclude body1="hande" body2="hande_right_finger"/>
+    <exclude body1="hande_left_finger" body2="hande_right_finger"/>
   </contact>
 
   <tendon>
