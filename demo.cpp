@@ -4,6 +4,8 @@
 #include <iostream>
 #include <unordered_set>
 
+#include <QMetaObject>
+
 #include "dxKinMuJoCo.h"
 #include "dxPlannerSimple.h"
 
@@ -21,6 +23,11 @@ demo::demo(dxMuJoCoRobotSimulator* simulator, QObject* parent)
         }
         if (mTrajectoryIndex >= mTrajectory.size())
         {
+            if (mPickPlaceActive)
+            {
+                advancePickAndPlace();
+                return;
+            }
             if (mEndBehavior == EndBehavior::StopCommands)
             {
                 mTrajectoryTimer->stop();
@@ -161,7 +168,7 @@ void demo::testKinematics()
     const dxMuJoCoRobotState state = mSim->getRobotState();
 
     dxKinMuJoCo::PoseResult fkResult;
-    if (!kin.getFK(state.qpos, fkResult))
+    if (!kin.getFK(state.jointConf, fkResult))
     {
         std::cout << "[testKinematics] FK failed." << std::endl;
         return;
@@ -191,7 +198,7 @@ void demo::testKinematics()
     };
 
     std::vector<double> solution;
-    const bool ikOk = kin.getIK(state.qpos, target, solution);
+    const bool ikOk = kin.getIK(state.jointConf, target, solution);
 
     std::cout << std::fixed << std::setprecision(6);
     std::cout << "[testKinematics] FK pos: "
@@ -218,7 +225,7 @@ void demo::testPlannerSimple()
     }
 
     const dxMuJoCoRobotState state = mSim->getRobotState();
-    std::vector<double> startDof = kin.getDofQpos(state.qpos);
+    std::vector<double> startDof = state.jointConf;
     if (startDof.empty())
     {
         std::cout << "[testPlannerSimple] empty joint state." << std::endl;
@@ -289,7 +296,13 @@ void demo::testPlannerSimple()
         return;
     }
 
-    emit drawTrajectory(planner.getTrajAs3DPoints(mTrajectory));
+    {
+        dxPlannerSimple vizPlanner(mKin.get());
+        if (vizPlanner.init())
+        {
+            emit drawTrajectory(vizPlanner.getTrajAs3DPoints(mTrajectory));
+        }
+    }
 
     std::cout << std::fixed << std::setprecision(2);
     std::cout << "[testPlannerSimple] start (deg): ";
@@ -348,12 +361,12 @@ void demo::testPlannerCartesian()
     params.steps = 80;
     params.debugPaths = true;
     params.checkCollisions = true;
-    params.collisionDist = 0.0;
+    params.collisionDist = -0.001;
     planner.setParams(params);
 
     const dxMuJoCoRobotState state = mSim->getRobotState();
     dxKinMuJoCo::PoseResult fkResult;
-    if (!kin.getFK(state.qpos, fkResult))
+    if (!kin.getFK(state.jointConf, fkResult))
     {
         std::cout << "[testPlannerCartesian] FK current failed." << std::endl;
         return;
@@ -384,7 +397,7 @@ void demo::testPlannerCartesian()
     std::vector<double> goalPose = startPose;
     goalPose[0] += 0.10;
 
-    const std::vector<double> seed = kin.getDofQpos(state.qpos);
+    const std::vector<double> seed = state.jointConf;
     if (seed.empty())
     {
         std::cout << "[testPlannerCartesian] empty seed." << std::endl;
@@ -418,6 +431,292 @@ void demo::testPlannerCartesian()
     startTrajectoryPlayback();
 }
 
+void demo::testPickAndPlace()
+{
+    //1. get positoin of redcube
+    std::vector<double> redcubePos = this->mSim->getBodyPoseByName("cube"); //[X Y Z Qw Qx Qy Qz]
+    if (redcubePos.size() != 7)
+    {
+        std::cout << "[testPickAndPlace] cube pose unavailable." << std::endl;
+        return;
+    }
+
+    if (!mKin)
+    {
+        mKin = std::make_unique<dxKinMuJoCo>(mSim->model(), mSim->data());
+    }
+    if (!mKin || !mKin->init())
+    {
+        std::cout << "[testPlannerSimple] planner init failed." << std::endl;
+        return;
+    }
+
+    //4. Send robot to Pre-Grasp Pose
+    dxKinMuJoCo::PoseResult out;
+    mKin->getFKCurrent(out);
+    std::vector<double> start = std::get<2>(out);
+
+    std::vector<double> preGrasp{ redcubePos[0],  redcubePos[1], redcubePos[2] + 0.1,
+                                  start[3], start[4], start[5], start[6]};
+    std::vector<double> microLift = preGrasp;
+    microLift[2] = redcubePos[2] + 0.06;
+
+    std::vector<std::vector<double>> trajectory;
+    if (!planCartesianTo(start, preGrasp, trajectory, 120))
+    {
+        std::cout << "[testPlannerCartesian] cartesian planning failed." << std::endl;
+        return;
+    }
+
+    std::vector<double> seed = mSim->getRobotState().jointConf;
+    if (seed.empty())
+    {
+        std::cout << "[testPickAndPlace] empty seed." << std::endl;
+        return;
+    }
+
+    mTrajectory.clear();
+    mTrajectory.reserve(trajectory.size());
+    for (const auto& point : trajectory)
+    {
+        std::vector<double> full = point;
+        for (size_t i = 0; i < mGripperDofIndices.size(); ++i)
+        {
+            const int idx = mGripperDofIndices[i];
+            if (idx >= 0 && static_cast<size_t>(idx) < full.size() && static_cast<size_t>(idx) < seed.size())
+            {
+                full[static_cast<size_t>(idx)] = seed[static_cast<size_t>(idx)];
+            }
+        }
+        mTrajectory.push_back(std::move(full));
+    }
+    {
+        dxPlannerSimple vizPlanner(mKin.get());
+        if (vizPlanner.init())
+        {
+            emit drawTrajectory(vizPlanner.getTrajAs3DPoints(mTrajectory));
+        }
+    }
+    startTrajectoryPlayback();
+    mPickPlaceActive = true;
+    mPickPlaceStage = PickPlaceStage::PreGraspMove;
+    mPickPlaceCubePose = redcubePos;
+    mPickPlacePreGraspPose = preGrasp;
+    mPickPlaceMicroLiftPose = microLift;
+    mPickPlaceWaitTicks = 25;
+
+}
+
+bool demo::planCartesianTo(const std::vector<double>& startPose,
+                           const std::vector<double>& goalPose,
+                           std::vector<std::vector<double>>& trajectory,
+                           int steps)
+{
+    if (!mKin)
+    {
+        return false;
+    }
+    dxPlannerSimple planner(mKin.get());
+    if (!planner.init())
+    {
+        return false;
+    }
+    dxPlannerSimple::Params params;
+    params.steps = (steps > 0) ? steps : 80;
+    params.debugPaths = true;
+    params.checkCollisions = false;
+    params.collisionDist = -0.001;
+    planner.setParams(params);
+
+    const std::vector<double> seed = mSim->getRobotState().jointConf;
+    if (seed.empty())
+    {
+        return false;
+    }
+
+    return planner.planCartesian(startPose, goalPose, seed, trajectory, params.steps);
+}
+
+bool demo::buildPoseFromJoints(const std::vector<double>& joints, std::vector<double>& outPose)
+{
+    if (!mKin)
+    {
+        return false;
+    }
+    dxKinMuJoCo::PoseResult out;
+    if (!mKin->getFK(joints, out))
+    {
+        return false;
+    }
+    outPose = std::get<2>(out);
+    return outPose.size() == 7;
+}
+
+void demo::advancePickAndPlace()
+{
+    if (!mPickPlaceActive)
+    {
+        return;
+    }
+    if (mTrajectory.empty())
+    {
+        std::cout << "[testPickAndPlace] empty trajectory in stage." << std::endl;
+        mPickPlaceActive = false;
+        mPickPlaceStage = PickPlaceStage::Idle;
+        return;
+    }
+    if (mPickPlaceStage == PickPlaceStage::PreGraspMove)
+    {
+        const std::vector<double> liveCubePose = mSim->getBodyPoseByName("cube");
+        if (liveCubePose.size() == 7)
+        {
+            mPickPlaceCubePose = liveCubePose;
+        }
+        std::vector<double> startPose;
+        if (!buildPoseFromJoints(mTrajectory.back(), startPose))
+        {
+            mPickPlaceActive = false;
+            mPickPlaceStage = PickPlaceStage::Idle;
+            return;
+        }
+
+        std::vector<double> graspPose =
+        {
+            mPickPlaceCubePose[0],
+            mPickPlaceCubePose[1],
+            mPickPlaceCubePose[2],
+            startPose[3],
+            startPose[4],
+            startPose[5],
+            startPose[6]
+        };
+
+        std::vector<std::vector<double>> trajectory;
+        if (!planCartesianTo(startPose, graspPose, trajectory, 120))
+        {
+            std::cout << "[testPickAndPlace] grasp planning failed." << std::endl;
+            mPickPlaceActive = false;
+            mPickPlaceStage = PickPlaceStage::Idle;
+            return;
+        }
+
+        mTrajectory = std::move(trajectory);
+        mTrajectoryIndex = 0;
+        mPickPlaceStage = PickPlaceStage::GraspMove;
+        return;
+    }
+
+    if (mPickPlaceStage == PickPlaceStage::GraspMove)
+    {
+        setGripperPosition(1.0);
+        mPickPlaceWaitRemaining = mPickPlaceWaitTicks;
+        mPickPlaceStage = PickPlaceStage::GripperCloseWait;
+        mPickPlaceContactLogPending = true;
+        return;
+    }
+
+    if (mPickPlaceStage == PickPlaceStage::GripperCloseWait)
+    {
+        if (mPickPlaceWaitRemaining > 0)
+        {
+            if (mPickPlaceContactLogPending && mPickPlaceWaitRemaining == mPickPlaceWaitTicks / 2 && mSim)
+            {
+                QMetaObject::invokeMethod(mSim, "printContactsForGeom", Qt::QueuedConnection,
+                                          Q_ARG(QString, QString("cube_geom")),
+                                          Q_ARG(double, 0.005));
+                QMetaObject::invokeMethod(mSim, "printContactsForGeom", Qt::QueuedConnection,
+                                          Q_ARG(QString, QString("left_pad_a")),
+                                          Q_ARG(double, 0.005));
+                QMetaObject::invokeMethod(mSim, "printContactsForGeom", Qt::QueuedConnection,
+                                          Q_ARG(QString, QString("left_pad_b")),
+                                          Q_ARG(double, 0.005));
+                QMetaObject::invokeMethod(mSim, "printContactsForGeom", Qt::QueuedConnection,
+                                          Q_ARG(QString, QString("right_pad_a")),
+                                          Q_ARG(double, 0.005));
+                QMetaObject::invokeMethod(mSim, "printContactsForGeom", Qt::QueuedConnection,
+                                          Q_ARG(QString, QString("right_pad_b")),
+                                          Q_ARG(double, 0.005));
+                mPickPlaceContactLogPending = false;
+            }
+            --mPickPlaceWaitRemaining;
+            return;
+        }
+
+        std::vector<double> startPose;
+        if (!buildPoseFromJoints(mTrajectory.back(), startPose))
+        {
+            mPickPlaceActive = false;
+            mPickPlaceStage = PickPlaceStage::Idle;
+            return;
+        }
+
+        std::vector<std::vector<double>> trajectory;
+        if (!planCartesianTo(startPose, mPickPlaceMicroLiftPose, trajectory, 300))
+        {
+            std::cout << "[testPickAndPlace] lift planning failed." << std::endl;
+            mPickPlaceActive = false;
+            mPickPlaceStage = PickPlaceStage::Idle;
+            return;
+        }
+
+        mTrajectory = std::move(trajectory);
+        mTrajectoryIndex = 0;
+        {
+            dxPlannerSimple vizPlanner(mKin.get());
+            if (vizPlanner.init())
+            {
+                emit drawTrajectory(vizPlanner.getTrajAs3DPoints(mTrajectory));
+            }
+        }
+        mPickPlaceStage = PickPlaceStage::MicroLiftMove;
+        return;
+    }
+
+    if (mPickPlaceStage == PickPlaceStage::MicroLiftMove)
+    {
+        std::vector<double> startPose;
+        if (!buildPoseFromJoints(mTrajectory.back(), startPose))
+        {
+            mPickPlaceActive = false;
+            mPickPlaceStage = PickPlaceStage::Idle;
+            return;
+        }
+
+        std::vector<std::vector<double>> trajectory;
+        if (!planCartesianTo(startPose, mPickPlacePreGraspPose, trajectory, 300))
+        {
+            std::cout << "[testPickAndPlace] lift planning failed." << std::endl;
+            mPickPlaceActive = false;
+            mPickPlaceStage = PickPlaceStage::Idle;
+            return;
+        }
+
+        mTrajectory = std::move(trajectory);
+        mTrajectoryIndex = 0;
+        {
+            dxPlannerSimple vizPlanner(mKin.get());
+            if (vizPlanner.init())
+            {
+                emit drawTrajectory(vizPlanner.getTrajAs3DPoints(mTrajectory));
+            }
+        }
+        mPickPlaceStage = PickPlaceStage::LiftMove;
+        return;
+    }
+
+    if (mPickPlaceStage == PickPlaceStage::LiftMove)
+    {
+        mPickPlaceActive = false;
+        mPickPlaceStage = PickPlaceStage::Idle;
+        if (mEndBehavior == EndBehavior::StopCommands)
+        {
+            mTrajectoryTimer->stop();
+        }
+    }
+}
+
+
+
 void demo::closeGripper()
 {
     setGripperPosition(1.0);
@@ -431,6 +730,11 @@ void demo::openGripper()
 void demo::setGripperPosition(double ratio)
 {
     emit gripperPositionRequested(ratio);
+}
+
+void demo::setCubeWeldActive(bool active)
+{
+    emit cubeWeldRequested(active);
 }
 
 void demo::setEndBehavior(EndBehavior behavior)

@@ -77,6 +77,7 @@ bool dxKinMuJoCo::setModel(mjModel* model, mjData* data)
     mModel = model;
     mDataRef = data;
     mEEBodyId = -1;
+    mEESiteId = -1;
     mJointIds.clear();
     mQposIndices.clear();
     mDofIndices.clear();
@@ -147,7 +148,7 @@ std::vector<double> dxKinMuJoCo::getDofQpos(const std::vector<double>& qpos) con
     out.reserve(mQposIndices.size());
     for (int idx : mQposIndices)
     {
-        out.push_back(qpos[static_cast<size_t>(idx)]);
+        out.push_back(qpos[idx]);
     }
     return out;
 }
@@ -162,7 +163,7 @@ bool dxKinMuJoCo::getFK(const std::vector<double>& qpos, PoseResult& out)
     {
         return false;
     }
-    if (mEEBodyId < 0)
+    if (mEEBodyId < 0 && mEESiteId < 0)
     {
         return false;
     }
@@ -179,7 +180,6 @@ bool dxKinMuJoCo::getFK(const std::vector<double>& qpos, PoseResult& out)
         return false;
     }
 
-    std::get<2>(out) = qpos;
     return true;
 }
 
@@ -189,7 +189,7 @@ bool dxKinMuJoCo::getFKCurrent(PoseResult& out) const
     {
         return false;
     }
-    if (mEEBodyId < 0)
+    if (mEEBodyId < 0 && mEESiteId < 0)
     {
         return false;
     }
@@ -206,7 +206,6 @@ bool dxKinMuJoCo::getFKCurrent(PoseResult& out) const
         return false;
     }
 
-    std::get<2>(out) = extractDofQpos(data);
     return true;
 }
 
@@ -261,8 +260,18 @@ bool dxKinMuJoCo::getIK(const std::vector<double>& seed,
     {
         mj_forward(mModel, mDataScratch);
 
-        const double* pos = mDataScratch->xpos + 3 * mEEBodyId;
-        const double* mat = mDataScratch->xmat + 9 * mEEBodyId;
+        const double* pos = nullptr;
+        const double* mat = nullptr;
+        if (mEESiteId >= 0)
+        {
+            pos = mDataScratch->site_xpos + 3 * mEESiteId;
+            mat = mDataScratch->site_xmat + 9 * mEESiteId;
+        }
+        else
+        {
+            pos = mDataScratch->xpos + 3 * mEEBodyId;
+            mat = mDataScratch->xmat + 9 * mEEBodyId;
+        }
 
         double currQuat[4] = { 1.0, 0.0, 0.0, 0.0 };
         mju_mat2Quat(currQuat, mat);
@@ -324,7 +333,14 @@ bool dxKinMuJoCo::getIK(const std::vector<double>& seed,
             return true;
         }
 
-        mj_jacBody(mModel, mDataScratch, jacp.data(), jacr.data(), mEEBodyId);
+        if (mEESiteId >= 0)
+        {
+            mj_jacSite(mModel, mDataScratch, jacp.data(), jacr.data(), mEESiteId);
+        }
+        else
+        {
+            mj_jacBody(mModel, mDataScratch, jacp.data(), jacr.data(), mEEBodyId);
+        }
 
         Eigen::MatrixXd J(6, dofCount);
         for (int i = 0; i < dofCount; ++i)
@@ -522,6 +538,17 @@ bool dxKinMuJoCo::resolveEndEffectorBody()
         return false;
     }
 
+    const int tcpId = mj_name2id(mModel, mjOBJ_SITE, "tcp");
+    const int pinchId = mj_name2id(mModel, mjOBJ_SITE, "pinch");
+    if (tcpId >= 0)
+    {
+        mEESiteId = tcpId;
+    }
+    else if (pinchId >= 0)
+    {
+        mEESiteId = pinchId;
+    }
+
     int bestBody = -1;
     int bestDepth = -1;
 
@@ -549,7 +576,7 @@ bool dxKinMuJoCo::resolveEndEffectorBody()
     }
 
     mEEBodyId = bestBody;
-    return mEEBodyId >= 0;
+    return (mEEBodyId >= 0) || (mEESiteId >= 0);
 }
 
 bool dxKinMuJoCo::ensureScratchData()
@@ -663,12 +690,22 @@ std::vector<double> dxKinMuJoCo::extractDofQpos(const mjData* data) const
 
 bool dxKinMuJoCo::computePoseFromData(const mjData* data, PoseResult& out) const
 {
-    if (!data || mEEBodyId < 0)
+    if (!data || (mEEBodyId < 0 && mEESiteId < 0))
     {
         return false;
     }
-    const double* pos = data->xpos + 3 * mEEBodyId;
-    const double* mat = data->xmat + 9 * mEEBodyId;
+    const double* pos = nullptr;
+    const double* mat = nullptr;
+    if (mEESiteId >= 0)
+    {
+        pos = data->site_xpos + 3 * mEESiteId;
+        mat = data->site_xmat + 9 * mEESiteId;
+    }
+    else
+    {
+        pos = data->xpos + 3 * mEEBodyId;
+        mat = data->xmat + 9 * mEEBodyId;
+    }
 
     vpHomogeneousMatrix pose;
     pose[0][0] = mat[0];
@@ -704,5 +741,39 @@ bool dxKinMuJoCo::computePoseFromData(const mjData* data, PoseResult& out) const
 
     std::get<0>(out) = pose;
     std::get<1>(out) = eigenPose;
+    buildPoseVectorFromData(data, std::get<2>(out));
     return true;
+}
+
+void dxKinMuJoCo::buildPoseVectorFromData(const mjData* data, std::vector<double>& out) const
+{
+    out.clear();
+    if (!data || (mEEBodyId < 0 && mEESiteId < 0))
+    {
+        return;
+    }
+
+    const double* pos = nullptr;
+    const double* mat = nullptr;
+    if (mEESiteId >= 0)
+    {
+        pos = data->site_xpos + 3 * mEESiteId;
+        mat = data->site_xmat + 9 * mEESiteId;
+    }
+    else
+    {
+        pos = data->xpos + 3 * mEEBodyId;
+        mat = data->xmat + 9 * mEEBodyId;
+    }
+    double quat[4] = { 1.0, 0.0, 0.0, 0.0 };
+    mju_mat2Quat(quat, mat);
+
+    out.reserve(7);
+    out.push_back(pos[0]);
+    out.push_back(pos[1]);
+    out.push_back(pos[2]);
+    out.push_back(quat[0]);
+    out.push_back(quat[1]);
+    out.push_back(quat[2]);
+    out.push_back(quat[3]);
 }

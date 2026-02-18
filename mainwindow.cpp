@@ -67,10 +67,21 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
                     mSim, &dxMuJoCoRobotSimulator::setCtrlTargetsFromJointPositions, Qt::QueuedConnection);
             connect(mDemo.get(), &demo::drawTrajectory,
                     mViewer, &dxMuJoCoRobotViewer::drawTrajectory);
+            connect(mDemo.get(), &demo::drawFrames,
+                    mViewer, &dxMuJoCoRobotViewer::drawFrames);
             connect(mDemo.get(), &demo::closeGripperRequested,
                     mSim, &dxMuJoCoRobotSimulator::closeGripper, Qt::QueuedConnection);
             connect(mDemo.get(), &demo::gripperPositionRequested,
                     mSim, &dxMuJoCoRobotSimulator::setGripperPosition, Qt::QueuedConnection);
+            connect(mDemo.get(), &demo::cubeWeldRequested, this, [this](bool active)
+            {
+                if (mSim)
+                {
+                    QMetaObject::invokeMethod(mSim, "setEqualityActive", Qt::QueuedConnection,
+                                              Q_ARG(QString, QString("cube_weld")),
+                                              Q_ARG(bool, active));
+                }
+            });
         }
         if (mViewer)
         {
@@ -93,7 +104,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
     {
         if (mDemo)
         {
-            mDemo->testPlannerCartesian();
+            mDemo->testPickAndPlace();
         }
     });
 

@@ -22,6 +22,7 @@ public:
     void reset();
 
     void drawTrajectory(const std::vector<std::array<double, 3>>& points);
+    void drawFrames(const std::vector<std::array<double, 12>>& frames);
 
     mjModel* model() const
     {
@@ -47,6 +48,7 @@ protected:
 private:
     void initVisuals();
     void appendPathGeoms(const std::vector<std::array<double, 3>>& points, const float rgba[4]);
+    void appendFrameGeoms(const std::vector<std::array<double, 12>>& frames);
     void shutdownVisuals();
     void shutdownModel();
 
@@ -70,5 +72,6 @@ private:
     double mLastY = 0.0;
 
     std::vector<std::array<double, 3>> mTrajectoryPath;
+    std::vector<std::array<double, 12>> mDebugFrames;
     size_t mMaxPathPoints = 4000;
 };

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <iostream>
 
 namespace
 {
@@ -65,6 +66,67 @@ dxMuJoCoRobotState dxMuJoCoRobotSimulator::getRobotState() const
 {
     std::lock_guard<std::mutex> lock(mStateMutex);
     return mState;
+}
+
+std::vector<double> dxMuJoCoRobotSimulator::getBodyPoseByName(const std::string& name) const
+{
+    std::vector<double> out;
+    if (!mModel || !mData || name.empty())
+    {
+        return out;
+    }
+
+    const int id = mj_name2id(mModel, mjOBJ_BODY, name.c_str());
+    if (id < 0 || id >= mModel->nbody)
+    {
+        return out;
+    }
+
+    const double* pos = mData->xpos + 3 * id;
+    const double* mat = mData->xmat + 9 * id;
+    double quat[4] = { 1.0, 0.0, 0.0, 0.0 };
+    mju_mat2Quat(quat, mat);
+
+    out.reserve(7);
+    out.push_back(pos[0]);
+    out.push_back(pos[1]);
+    out.push_back(pos[2]);
+    out.push_back(quat[0]);
+    out.push_back(quat[1]);
+    out.push_back(quat[2]);
+    out.push_back(quat[3]);
+
+    return out;
+}
+
+std::vector<double> dxMuJoCoRobotSimulator::getGeomPoseByName(const std::string& name) const
+{
+    std::vector<double> out;
+    if (!mModel || !mData || name.empty())
+    {
+        return out;
+    }
+
+    const int id = mj_name2id(mModel, mjOBJ_GEOM, name.c_str());
+    if (id < 0 || id >= mModel->ngeom)
+    {
+        return out;
+    }
+
+    const double* pos = mData->geom_xpos + 3 * id;
+    const double* mat = mData->geom_xmat + 9 * id;
+    double quat[4] = { 1.0, 0.0, 0.0, 0.0 };
+    mju_mat2Quat(quat, mat);
+
+    out.reserve(7);
+    out.push_back(pos[0]);
+    out.push_back(pos[1]);
+    out.push_back(pos[2]);
+    out.push_back(quat[0]);
+    out.push_back(quat[1]);
+    out.push_back(quat[2]);
+    out.push_back(quat[3]);
+    return out;
 }
 
 void dxMuJoCoRobotSimulator::setCtrlTargets(const std::vector<double>& targets)
@@ -264,6 +326,112 @@ void dxMuJoCoRobotSimulator::setGripperPosition(double ratio)
     mHasCtrlTargets = true;
     mHoldCtrlTargets = targets;
     mHoldMode = HoldMode::HoldCtrlTargets;
+}
+
+void dxMuJoCoRobotSimulator::setEqualityActive(const QString& name, bool active)
+{
+    if (!mModel || !mData || name.isEmpty())
+    {
+        return;
+    }
+    const std::string stdName = name.toStdString();
+    const int id = mj_name2id(mModel, mjOBJ_EQUALITY, stdName.c_str());
+    if (id < 0 || id >= mModel->neq)
+    {
+        return;
+    }
+    mData->eq_active[id] = active ? 1 : 0;
+}
+
+void dxMuJoCoRobotSimulator::printContacts(int maxContacts, double minDist)
+{
+    if (!mModel || !mData)
+    {
+        return;
+    }
+    if (maxContacts <= 0)
+    {
+        return;
+    }
+
+    const int ncon = mData->ncon;
+    std::cerr << "[contacts] count=" << ncon << std::endl;
+    const int count = std::min(ncon, maxContacts);
+    for (int i = 0; i < count; ++i)
+    {
+        const mjContact& contact = mData->contact[i];
+        if (contact.dist > minDist)
+        {
+            continue;
+        }
+        const int g1 = contact.geom1;
+        const int g2 = contact.geom2;
+        const int b1 = (g1 >= 0 && g1 < mModel->ngeom) ? mModel->geom_bodyid[g1] : -1;
+        const int b2 = (g2 >= 0 && g2 < mModel->ngeom) ? mModel->geom_bodyid[g2] : -1;
+        const char* g1Name = mj_id2name(mModel, mjOBJ_GEOM, g1);
+        const char* g2Name = mj_id2name(mModel, mjOBJ_GEOM, g2);
+        const char* b1Name = mj_id2name(mModel, mjOBJ_BODY, b1);
+        const char* b2Name = mj_id2name(mModel, mjOBJ_BODY, b2);
+
+        mjtNum forces[6] = { 0 };
+        mj_contactForce(mModel, mData, i, forces);
+
+        std::cerr << "  - geom1: " << (g1Name ? g1Name : "(unnamed)")
+                  << " (body " << (b1Name ? b1Name : "(unnamed)") << ")"
+                  << ", geom2: " << (g2Name ? g2Name : "(unnamed)")
+                  << " (body " << (b2Name ? b2Name : "(unnamed)") << ")"
+                  << ", dist=" << contact.dist
+                  << ", fn=" << forces[0] << std::endl;
+    }
+}
+
+void dxMuJoCoRobotSimulator::printContactsForGeom(const QString& geomName, double minDist)
+{
+    if (!mModel || !mData || geomName.isEmpty())
+    {
+        return;
+    }
+    const std::string name = geomName.toStdString();
+    const int gid = mj_name2id(mModel, mjOBJ_GEOM, name.c_str());
+    if (gid < 0 || gid >= mModel->ngeom)
+    {
+        std::cerr << "[contacts] geom not found: " << name << std::endl;
+        return;
+    }
+
+    const int ncon = mData->ncon;
+    std::cerr << "[contacts] geom=" << name << " count=" << ncon << std::endl;
+    for (int i = 0; i < ncon; ++i)
+    {
+        const mjContact& contact = mData->contact[i];
+        if (contact.dist > minDist)
+        {
+            continue;
+        }
+        if (contact.geom1 != gid && contact.geom2 != gid)
+        {
+            continue;
+        }
+
+        const int g1 = contact.geom1;
+        const int g2 = contact.geom2;
+        const int b1 = (g1 >= 0 && g1 < mModel->ngeom) ? mModel->geom_bodyid[g1] : -1;
+        const int b2 = (g2 >= 0 && g2 < mModel->ngeom) ? mModel->geom_bodyid[g2] : -1;
+        const char* g1Name = mj_id2name(mModel, mjOBJ_GEOM, g1);
+        const char* g2Name = mj_id2name(mModel, mjOBJ_GEOM, g2);
+        const char* b1Name = mj_id2name(mModel, mjOBJ_BODY, b1);
+        const char* b2Name = mj_id2name(mModel, mjOBJ_BODY, b2);
+
+        mjtNum forces[6] = { 0 };
+        mj_contactForce(mModel, mData, i, forces);
+
+        std::cerr << "  - geom1: " << (g1Name ? g1Name : "(unnamed)")
+                  << " (body " << (b1Name ? b1Name : "(unnamed)") << ")"
+                  << ", geom2: " << (g2Name ? g2Name : "(unnamed)")
+                  << " (body " << (b2Name ? b2Name : "(unnamed)") << ")"
+                  << ", dist=" << contact.dist
+                  << ", fn=" << forces[0] << std::endl;
+    }
 }
 
 void dxMuJoCoRobotSimulator::loadModel(const QString& modelPath)
@@ -605,8 +773,8 @@ void dxMuJoCoRobotSimulator::applyJointPositionsDirect(const std::vector<double>
         if (qposAdr >= 0 && qposAdr < mModel->nq)
         {
             if (!onlyActuated ||
-                (jointIndex >= 0 && jointIndex < static_cast<int>(actuated.size()) &&
-                 actuated[static_cast<size_t>(jointIndex)]))
+                    (jointIndex >= 0 && jointIndex < static_cast<int>(actuated.size()) &&
+                     actuated[static_cast<size_t>(jointIndex)]))
             {
                 mData->qpos[qposAdr] = jointPositions[static_cast<size_t>(jointIndex)];
             }
@@ -698,9 +866,10 @@ void dxMuJoCoRobotSimulator::updateStateSnapshot()
         return;
     }
 
-    snapshot.qpos.assign(mData->qpos, mData->qpos + mModel->nq);
-    snapshot.qvel.assign(mData->qvel, mData->qvel + mModel->nv);
+    snapshot.jointConf = extractJointPositions();
+    snapshot.jointVel = extractJointVelocities();
     snapshot.actuatorInput.assign(mData->ctrl, mData->ctrl + mModel->nu);
+    snapshot.worldQpos.assign(mData->qpos, mData->qpos + mModel->nq);
 
     int siteId = mj_name2id(mModel, mjOBJ_SITE, "tcp");
     if (siteId < 0)
@@ -738,6 +907,31 @@ std::vector<double> dxMuJoCoRobotSimulator::extractJointPositions() const
         if (qposAdr >= 0 && qposAdr < mModel->nq)
         {
             joints.push_back(mData->qpos[qposAdr]);
+        }
+    }
+
+    return joints;
+}
+
+std::vector<double> dxMuJoCoRobotSimulator::extractJointVelocities() const
+{
+    std::vector<double> joints;
+    if (!mModel || !mData)
+    {
+        return joints;
+    }
+
+    for (int jid = 0; jid < mModel->njnt; ++jid)
+    {
+        const int type = mModel->jnt_type[jid];
+        if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
+        {
+            continue;
+        }
+        const int dofAdr = mModel->jnt_dofadr[jid];
+        if (dofAdr >= 0 && dofAdr < mModel->nv)
+        {
+            joints.push_back(mData->qvel[dofAdr]);
         }
     }
 

@@ -56,12 +56,14 @@ private:
     bool applyQpos(const std::vector<double>& qpos, mjData* data) const;
     std::vector<double> extractDofQpos(const mjData* data) const;
     bool computePoseFromData(const mjData* data, PoseResult& out) const;
+    void buildPoseVectorFromData(const mjData* data, std::vector<double>& out) const;
 
     mjModel* mModel = nullptr;
     mjData* mDataRef = nullptr;
     mjData* mDataScratch = nullptr;
 
     int mEEBodyId = -1;
+    int mEESiteId = -1;
 
     std::vector<int> mJointIds;
     std::vector<int> mQposIndices;

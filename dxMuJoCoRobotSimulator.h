@@ -32,6 +32,8 @@ public:
     mjData* data() const;
 
     dxMuJoCoRobotState getRobotState() const;
+    std::vector<double> getBodyPoseByName(const std::string& name) const;
+    std::vector<double> getGeomPoseByName(const std::string& name) const;
 
     void setCtrlByName(const std::string& actuatorName, double value);
 
@@ -45,6 +47,9 @@ public slots:
     void setJointPositions(const std::vector<double>& jointPositions);
     void closeGripper();
     void setGripperPosition(double ratio);
+    void setEqualityActive(const QString& name, bool active);
+    void printContacts(int maxContacts, double minDist);
+    void printContactsForGeom(const QString& geomName, double minDist);
     void setPdGains(double kp, double kd);
     void enablePdHold(bool enabled);
     void enableHardLock(bool enabled);
@@ -80,6 +85,7 @@ private:
     std::vector<int> getTendonActuatorIndices() const;
     void updateStateSnapshot();
     std::vector<double> extractJointPositions() const;
+    std::vector<double> extractJointVelocities() const;
 
     mutable std::mutex mStateMutex;
     dxMuJoCoRobotState mState;

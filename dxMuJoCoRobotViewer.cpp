@@ -98,24 +98,67 @@ void dxMuJoCoRobotViewer::drawTrajectory(const std::vector<std::array<double, 3>
     update();
 }
 
+void dxMuJoCoRobotViewer::drawFrames(const std::vector<std::array<double, 12>>& frames)
+{
+    mDebugFrames = frames;
+    update();
+}
+
 void dxMuJoCoRobotViewer::applyState(const dxMuJoCoRobotState& state)
 {
     if (!mModel || !mData)
     {
         return;
     }
-    if (static_cast<int>(state.qpos.size()) == mModel->nq)
+    if (static_cast<int>(state.worldQpos.size()) == mModel->nq)
     {
         for (int i = 0; i < mModel->nq; ++i)
         {
-            mData->qpos[i] = state.qpos[static_cast<size_t>(i)];
+            mData->qpos[i] = state.worldQpos[static_cast<size_t>(i)];
         }
     }
-    if (static_cast<int>(state.qvel.size()) == mModel->nv)
+    else if (!state.jointConf.empty())
     {
-        for (int i = 0; i < mModel->nv; ++i)
+        int jointIndex = 0;
+        for (int jid = 0; jid < mModel->njnt; ++jid)
         {
-            mData->qvel[i] = state.qvel[static_cast<size_t>(i)];
+            const int type = mModel->jnt_type[jid];
+            if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
+            {
+                continue;
+            }
+            if (jointIndex >= static_cast<int>(state.jointConf.size()))
+            {
+                break;
+            }
+            const int qposAdr = mModel->jnt_qposadr[jid];
+            if (qposAdr >= 0 && qposAdr < mModel->nq)
+            {
+                mData->qpos[qposAdr] = state.jointConf[static_cast<size_t>(jointIndex)];
+            }
+            ++jointIndex;
+        }
+    }
+    if (!state.jointVel.empty())
+    {
+        int jointIndex = 0;
+        for (int jid = 0; jid < mModel->njnt; ++jid)
+        {
+            const int type = mModel->jnt_type[jid];
+            if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
+            {
+                continue;
+            }
+            if (jointIndex >= static_cast<int>(state.jointVel.size()))
+            {
+                break;
+            }
+            const int dofAdr = mModel->jnt_dofadr[jid];
+            if (dofAdr >= 0 && dofAdr < mModel->nv)
+            {
+                mData->qvel[dofAdr] = state.jointVel[static_cast<size_t>(jointIndex)];
+            }
+            ++jointIndex;
         }
     }
     if (static_cast<int>(state.actuatorInput.size()) == mModel->nu)
@@ -165,6 +208,7 @@ void dxMuJoCoRobotViewer::paintGL()
     mjv_updateScene(mModel, mData, &mOpt, nullptr, &mCam, mjCAT_ALL, &mScn);
     const float pathColor[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
     appendPathGeoms(mTrajectoryPath, pathColor);
+    appendFrameGeoms(mDebugFrames);
     mjr_render(viewport, &mScn, &mCon);
 }
 
@@ -345,6 +389,57 @@ void dxMuJoCoRobotViewer::appendPathGeoms(const std::vector<std::array<double, 3
                         };
         mjv_initGeom(geom, mjGEOM_SPHERE, size, pos, mat, rgba);
         geom->category = mjCAT_DECOR;
+    }
+}
+
+void dxMuJoCoRobotViewer::appendFrameGeoms(const std::vector<std::array<double, 12>>& frames)
+{
+    if (frames.empty())
+    {
+        return;
+    }
+
+    const float axisColors[3][4] =
+    {
+        { 1.0f, 0.1f, 0.1f, 1.0f },
+        { 0.1f, 1.0f, 0.1f, 1.0f },
+        { 0.1f, 0.1f, 1.0f, 1.0f }
+    };
+
+    const mjtNum size[3] = { 0.05, 0.005, 0.005 };
+
+    for (const auto& frame : frames)
+    {
+        mjtNum pos[3] =
+        {
+            static_cast<mjtNum>(frame[0]),
+            static_cast<mjtNum>(frame[1]),
+            static_cast<mjtNum>(frame[2])
+        };
+
+        mjtNum baseMat[9];
+        for (int i = 0; i < 9; ++i)
+        {
+            baseMat[i] = static_cast<mjtNum>(frame[3 + i]);
+        }
+
+        const mjtNum* xaxis = baseMat + 0;
+        const mjtNum* yaxis = baseMat + 3;
+        const mjtNum* zaxis = baseMat + 6;
+
+        const mjtNum mats[3][9] =
+        {
+            { xaxis[0], xaxis[1], xaxis[2], yaxis[0], yaxis[1], yaxis[2], zaxis[0], zaxis[1], zaxis[2] },
+            { yaxis[0], yaxis[1], yaxis[2], zaxis[0], zaxis[1], zaxis[2], xaxis[0], xaxis[1], xaxis[2] },
+            { zaxis[0], zaxis[1], zaxis[2], xaxis[0], xaxis[1], xaxis[2], yaxis[0], yaxis[1], yaxis[2] }
+        };
+
+        for (int axis = 0; axis < 3 && mScn.ngeom < mScn.maxgeom; ++axis)
+        {
+            mjvGeom* geom = mScn.geoms + mScn.ngeom++;
+            mjv_initGeom(geom, mjGEOM_ARROW, size, pos, mats[axis], axisColors[axis]);
+            geom->category = mjCAT_DECOR;
+        }
     }
 }
 

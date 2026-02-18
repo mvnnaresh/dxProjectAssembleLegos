@@ -104,7 +104,7 @@
       </default>
 
       <default class="finger_actuator">
-        <position ctrlrange="0 0.025" forcerange="-5000 5000" dampratio="100"/>
+        <position ctrlrange="0 0.025" forcerange="-60000 60000" dampratio="100"/>
       </default>
 
       <default class="gripper_slide">
@@ -198,12 +198,14 @@
     </body>
 
     <!-- Simple props on the tabletop (cube not on the support block) -->
-    <body name="support_block" pos="0.55 -0.2 0.05">
-      <geom type="box" size="0.04 0.04 0.05" rgba="0.6 0.6 0.6 1"/>
+    <body name="support_block" pos="0.55 -0.25 0.05">
+      <geom name="support_block_geom" type="box" size="0.04 0.04 0.05" rgba="0.6 0.6 0.6 1"
+            friction="0.01" solref="0.002 1" solimp="0.9 0.95 0.001" condim="4"/>
     </body>
-    <body name="cube" pos="0.55 -0.2 0.12">
+    <body name="cube" pos="0.55 -0.25 0.12">
       <freejoint/>
-      <geom type="box" size="0.02 0.02 0.02" rgba="0.8 0.2 0.2 1" friction="0.8" density="8000"/>
+      <geom name="cube_geom" type="box" size="0.015 0.015 0.015" rgba="0.8 0.2 0.2 1"
+            friction="0.4" density="800" solref="0.002 1" solimp="0.9 0.95 0.001" condim="4"/>
     </body>
 
     <!-- UR10e robot -->
@@ -283,7 +285,8 @@
                           mass="0.03804" diaginertia="1.22763e-05 1.22763e-05 1.22763e-05"/>
                         <joint name="hande_left_finger_joint" axis="1 0 0" class="finger_slide"/>
                         <geom mesh="left_finger" class="robotiq_visual" material="gray"/>
-                        <geom type="box" pos="-0.028 0.000009 0.037" size="0.003 0.01 0.01" class="soft"/>
+                        <geom name="left_pad_a" type="box" pos="-0.028 0.000009 0.042" size="0.003 0.012 0.006" class="soft" friction="20 6 0.007" condim="6"/>
+                        <geom name="left_pad_b" type="box" pos="-0.028 0.000009 0.032" size="0.003 0.012 0.006" class="soft" friction="20 6 0.007" condim="6"/>
                         <geom type="box" pos="-0.0306 0.000009 0.0232" euler="0 0.52 0" size="0.003 0.01 0.006"
                           solref="0.000000000001 1" solimp="0.99 0.999 0.0001" condim="6" contype="1"
                           conaffinity="1" friction="2 0.5 0.0001" mass="0" class="robotiq_collision"/>
@@ -297,8 +300,8 @@
                           mass="0.03804" diaginertia="1.22763e-05 1.22763e-05 1.22763e-05"/>
                         <joint name="hande_right_finger_joint" axis="-1 0 0" class="finger_slide"/>
                         <geom mesh="right_finger" class="robotiq_visual" material="gray"/>
-                        <geom type="box" pos="0.028 0.000009 0.042" size="0.003 0.01 0.005" class="soft"/>
-                        <geom type="box" pos="0.028 0.000009 0.032" size="0.003 0.01 0.005" class="soft"/>
+                        <geom name="right_pad_a" type="box" pos="0.028 0.000009 0.042" size="0.003 0.012 0.006" class="soft" friction="20 6 0.007" condim="6"/>
+                        <geom name="right_pad_b" type="box" pos="0.028 0.000009 0.032" size="0.003 0.012 0.006" class="soft" friction="20 6 0.007" condim="6"/>
                         <geom type="box" pos="0.0307 0.000009 0.0232" euler="0 -0.52 0" size="0.003 0.01 0.006"
                           solref="0.000000000001 1" solimp="0.99 0.999 0.0001" condim="6" contype="1"
                           conaffinity="1" friction="2 0.5 0.0001" mass="0" class="robotiq_collision"/>
@@ -326,6 +329,9 @@
     <exclude body1="hande" body2="hande_left_finger"/>
     <exclude body1="hande" body2="hande_right_finger"/>
     <exclude body1="hande_left_finger" body2="hande_right_finger"/>
+    <exclude body1="forearm_link" body2="hande_left_finger"/>
+    <exclude body1="forearm_link" body2="hande_right_finger"/>
+    <exclude body1="forearm_link" body2="hande"/>
   </contact>
 
   <tendon>
@@ -336,6 +342,7 @@
   </tendon>
 
   <equality>
+    <weld name="cube_weld" body1="hande" body2="cube" relpose="0 0 0 1 0 0 0" active="false"/>
     <joint joint1="hande_right_finger_joint" joint2="hande_left_finger_joint" polycoef="0 1 0 0 0"
       solimp="0.95 0.99 0.001" solref="0.000005 1"/>
   </equality>
@@ -353,7 +360,7 @@
   <keyframe>
     <!-- HOME_POS pose: cube freejoint (pos+quat), arm joints, gripper joints. -->
     <key name="HOME_POS"
-      qpos="0.55 -0.2 0.12 1 0 0 0 0 -1.5708 1.5708 -1.5708 -1.5708 0 0 0"
+      qpos="0.55 -0.25 0.12 1 0 0 0 0 -1.5708 1.5708 -1.5708 -1.5708 0 0 0"
       ctrl="0 -1.5708 1.5708 -1.5708 -1.5708 0 0"/>
   </keyframe>
 </mujoco>
