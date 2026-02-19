@@ -16,111 +16,175 @@
 
 class dxMuJoCoRobotSimulator : public QObject
 {
-    Q_OBJECT
+	Q_OBJECT
 
 public:
-    explicit dxMuJoCoRobotSimulator(QObject* parent = nullptr);
-    ~dxMuJoCoRobotSimulator() override;
+	explicit dxMuJoCoRobotSimulator(QObject* parent = nullptr);
 
-    dxMuJoCoRobotSimulator(const dxMuJoCoRobotSimulator&) = delete;
-    dxMuJoCoRobotSimulator& operator=(const dxMuJoCoRobotSimulator&) = delete;
+	~dxMuJoCoRobotSimulator() override;
 
-    void setControlRateHz(double rateHz);
-    double controlRateHz() const;
+	dxMuJoCoRobotSimulator(const dxMuJoCoRobotSimulator&) = delete;
 
-    mjModel* model() const;
-    mjData* data() const;
+	dxMuJoCoRobotSimulator& operator=(const dxMuJoCoRobotSimulator&) = delete;
 
-    dxMuJoCoRobotState getRobotState() const;
-    std::vector<double> getBodyPoseByName(const std::string& name) const;
-    std::vector<double> getGeomPoseByName(const std::string& name) const;
+	void setControlRateHz(double rateHz);
 
-    void setCtrlByName(const std::string& actuatorName, double value);
+	dxMuJoCoRobotState getRobotState() const;
+
+	std::vector<double> getBodyPoseByName(const std::string& name) const;
+
+	std::vector<double> getGeomPoseByName(const std::string& name) const;
+
+	void setCtrlByName(const std::string& actuatorName, double value);
+
+	mjModel* model() const;
+
+	mjData* data() const;
 
 public slots:
-    void loadModel(const QString& modelPath);
-    void reset();
-    void start();
-    void stop();
-    void setCtrlTargets(const std::vector<double>& targets);
-    void setCtrlTargetsFromJointPositions(const std::vector<double>& jointPositions);
-    void setJointPositions(const std::vector<double>& jointPositions);
-    void closeGripper();
-    void setGripperPosition(double ratio);
-    void setEqualityActive(const QString& name, bool active);
-    void printContacts(int maxContacts, double minDist);
-    void printContactsForGeom(const QString& geomName, double minDist);
-    void setPdGains(double kp, double kd);
-    void enablePdHold(bool enabled);
-    void enableHardLock(bool enabled);
-    void lockCurrentPose();
-    void enableGripperAutoStop(bool enabled);
+	void loadModel(const QString& modelPath);
+
+	void reset();
+
+	void start();
+
+	void stop();
+
+	void setCtrlTargets(const std::vector<double>& targets);
+
+	void setCtrlTargetsFromJointPositions(const std::vector<double>& jointPositions);
+
+	void setJointPositions(const std::vector<double>& jointPositions);
+
+	void closeGripper();
+
+	void setGripperPosition(double ratio);
+
+	void setEqualityActive(const QString& name, bool active);
+
+	void printContacts(int maxContacts, double minDist);
+
+	void printContactsForGeom(const QString& geomName, double minDist);
+
+	void setPdGains(double kp, double kd);
+
+	void enablePdHold(bool enabled);
+
+	void enableHardLock(bool enabled);
+
+	void lockCurrentPose();
+
+	void enableGripperAutoStop(bool enabled);
+
 
 signals:
-    void modelLoaded(mjModel* model);
-    void stateUpdated();
-    void resetDone();
-    void error(const QString& message);
+	void modelLoaded(mjModel* model);
+
+	void stateUpdated();
+
+	void resetDone();
+
+	void error(const QString& message);
+
 
 private slots:
-    void stepLoop();
+	void stepLoop();
 
 private:
-    enum class HoldMode
-    {
-        None,
-        HoldJointTargets,
-        HoldCtrlTargets
-    };
+	enum class HoldMode
+	{
+		None,
+		HoldJointTargets,
+		HoldCtrlTargets
+	};
 
-    bool applyPoseByName(const char* poseName);
-    void printPoseSummary(const char* poseName) const;
-    void printDetails() const;
-    void shutdown();
-    void applyPendingTargets();
-    bool hasPendingTargets() const;
-    void applyCtrlTargetsDirect(const std::vector<double>& targets);
-    void applyCtrlTargetsFromJointPositionsDirect(const std::vector<double>& jointPositions);
-    void applyJointPositionsDirect(const std::vector<double>& jointPositions, bool onlyActuated = false);
-    void applyPdHoldFromJointTargets(const std::vector<double>& jointPositions);
-    std::vector<int> getTendonActuatorIndices() const;
-    std::vector<int> getGripperJointActuatorIndices() const;
-    bool hasGripperCubeContact() const;
-    void freezeAtCurrentPose();
-    void updateStateSnapshot();
-    std::vector<double> extractJointPositions() const;
-    std::vector<double> extractJointVelocities() const;
+	double controlRateHz() const;
 
-    mutable std::mutex mStateMutex;
-    dxMuJoCoRobotState mState;
+	bool applyPoseByName(const char* poseName);
 
-    mutable std::mutex mTargetMutex;
-    std::vector<double> mPendingCtrlTargets;
-    std::vector<double> mPendingQpos;
-    std::vector<std::pair<std::string, double>> mPendingNamedCtrls;
-    bool mHasCtrlTargets = false;
-    bool mHasPendingQpos = false;
-    HoldMode mHoldMode = HoldMode::HoldJointTargets;
-    std::vector<double> mHoldJointTargets;
-    std::vector<double> mHoldCtrlTargets;
-    bool mEnablePdHold = true;
-    double mPdKp = 50.0;
-    double mPdKd = 5.0;
-    bool mEnableHardLock = true;
-    bool mGripperAutoStopEnabled = true;
-    bool mGripperAutoStopArmed = false;
-    bool mGripperAutoStopEngaged = false;
+	void printPoseSummary(const char* poseName) const;
 
-    QString mModelPath;
-    bool mPoseApplied = false;
-    std::string mPoseAppliedName;
+	void printDetails() const;
 
-    mjModel* mModel = nullptr;
-    mjData* mData = nullptr;
+	void shutdown();
 
-    QTimer* mTimer = nullptr;
-    double mControlRateHz = 250.0;
-    bool mRunning = false;
+	void applyPendingTargets();
+
+	bool hasPendingTargets() const;
+
+	void applyCtrlTargetsDirect(const std::vector<double>& targets);
+
+	void applyCtrlTargetsFromJointPositionsDirect(const std::vector<double>& jointPositions);
+
+	void applyJointPositionsDirect(const std::vector<double>& jointPositions, bool onlyActuated = false);
+
+	void applyPdHoldFromJointTargets(const std::vector<double>& jointPositions);
+
+	std::vector<int> getTendonActuatorIndices() const;
+
+	std::vector<int> getGripperJointActuatorIndices() const;
+
+	bool hasGripperCubeContact() const;
+
+	void freezeAtCurrentPose();
+
+	void updateStateSnapshot();
+
+	std::vector<double> extractJointPositions() const;
+
+	std::vector<double> extractJointVelocities() const;
+
+	mutable std::mutex mStateMutex;
+
+	dxMuJoCoRobotState mState;
+
+	mutable std::mutex mTargetMutex;
+
+	std::vector<double> mPendingCtrlTargets;
+
+	std::vector<double> mPendingQpos;
+
+	std::vector<std::pair<std::string, double>> mPendingNamedCtrls;
+
+	bool mHasCtrlTargets = false;
+
+	bool mHasPendingQpos = false;
+
+	HoldMode mHoldMode = HoldMode::HoldJointTargets;
+
+	std::vector<double> mHoldJointTargets;
+
+	std::vector<double> mHoldCtrlTargets;
+
+	bool mEnablePdHold = true;
+
+	double mPdKp = 50.0;
+
+	double mPdKd = 5.0;
+
+	bool mEnableHardLock = true;
+
+	bool mGripperAutoStopEnabled = false;
+
+	bool mGripperAutoStopArmed = false;
+
+	bool mGripperAutoStopEngaged = true;
+
+	QString mModelPath;
+
+	bool mPoseApplied = false;
+
+	std::string mPoseAppliedName;
+
+	mjModel* mModel = nullptr;
+
+	mjData* mData = nullptr;
+
+	QTimer* mTimer = nullptr;
+
+	double mControlRateHz = 250.0;
+
+	bool mRunning = false;
 };
 
 Q_DECLARE_METATYPE(std::vector<double>)
