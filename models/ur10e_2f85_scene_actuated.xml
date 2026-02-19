@@ -104,7 +104,7 @@
       </default>
 
       <default class="finger_actuator">
-        <position ctrlrange="0 0.025" forcerange="-200 200" dampratio="2"/>
+        <position ctrlrange="0 0.025" forcerange="-1000 1000" dampratio="2"/>
       </default>
 
       <default class="gripper_slide">
@@ -130,7 +130,7 @@
       </default>
 
       <default class="robotiq_collision">
-        <geom type="mesh" group="3"/>
+        <geom type="mesh" group="3" contype="1" conaffinity="1"/>
         <default class="soft">
           <geom solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" condim="4" contype="1"
             conaffinity="1" friction="0.5 0.2 0.0001" mass="0.3"/>
@@ -287,8 +287,10 @@
                         <geom mesh="left_finger" class="robotiq_visual" material="gray"/>
                         <geom name="left_finger_block" type="box" pos="-0.026 0.000009 0.037" size="0.004 0.012 0.012"
                           class="soft" contype="1" conaffinity="1"/>
-                        <geom name="left_pad_a" type="box" pos="-0.028 0.000009 0.042" size="0.003 0.012 0.006" class="soft" friction="20 6 0.007" condim="6"/>
-                        <geom name="left_pad_b" type="box" pos="-0.028 0.000009 0.032" size="0.003 0.012 0.006" class="soft" friction="20 6 0.007" condim="6"/>
+                        <geom name="left_pad_a" type="box" pos="-0.028 0.000009 0.042" size="0.003 0.012 0.006"
+                          class="soft" friction="20 6 0.007" condim="6" contype="1" conaffinity="1"/>
+                        <geom name="left_pad_b" type="box" pos="-0.028 0.000009 0.032" size="0.003 0.012 0.006"
+                          class="soft" friction="20 6 0.007" condim="6" contype="1" conaffinity="1"/>
                         <geom type="box" pos="-0.0306 0.000009 0.0232" euler="0 0.52 0" size="0.003 0.01 0.006"
                           solref="0.000000000001 1" solimp="0.99 0.999 0.0001" condim="6" contype="1"
                           conaffinity="1" friction="2 0.5 0.0001" mass="0" class="robotiq_collision"/>
@@ -304,8 +306,10 @@
                         <geom mesh="right_finger" class="robotiq_visual" material="gray"/>
                         <geom name="right_finger_block" type="box" pos="0.026 0.000009 0.037" size="0.004 0.012 0.012"
                           class="soft" contype="1" conaffinity="1"/>
-                        <geom name="right_pad_a" type="box" pos="0.028 0.000009 0.042" size="0.003 0.012 0.006" class="soft" friction="20 6 0.007" condim="6"/>
-                        <geom name="right_pad_b" type="box" pos="0.028 0.000009 0.032" size="0.003 0.012 0.006" class="soft" friction="20 6 0.007" condim="6"/>
+                        <geom name="right_pad_a" type="box" pos="0.028 0.000009 0.042" size="0.003 0.012 0.006"
+                          class="soft" friction="20 6 0.007" condim="6" contype="1" conaffinity="1"/>
+                        <geom name="right_pad_b" type="box" pos="0.028 0.000009 0.032" size="0.003 0.012 0.006"
+                          class="soft" friction="20 6 0.007" condim="6" contype="1" conaffinity="1"/>
                         <geom type="box" pos="0.0307 0.000009 0.0232" euler="0 -0.52 0" size="0.003 0.01 0.006"
                           solref="0.000000000001 1" solimp="0.99 0.999 0.0001" condim="6" contype="1"
                           conaffinity="1" friction="2 0.5 0.0001" mass="0" class="robotiq_collision"/>
@@ -338,17 +342,8 @@
     <exclude body1="forearm_link" body2="hande"/>
   </contact>
 
-  <tendon>
-    <fixed name="split">
-      <joint joint="hande_left_finger_joint" coef="0.485"/>
-      <joint joint="hande_right_finger_joint" coef="0.485"/>
-    </fixed>
-  </tendon>
-
   <equality>
     <weld name="cube_weld" body1="hande" body2="cube" relpose="0 0 0 1 0 0 0" active="false"/>
-    <joint joint1="hande_right_finger_joint" joint2="hande_left_finger_joint" polycoef="0 1 0 0 0"
-      solimp="0.95 0.99 0.001" solref="0.000005 1"/>
   </equality>
 
   <actuator>
@@ -358,7 +353,8 @@
     <general class="size2" name="wrist_1" joint="wrist_1_joint"/>
     <general class="size2" name="wrist_2" joint="wrist_2_joint"/>
     <general class="size2" name="wrist_3" joint="wrist_3_joint"/>
-    <position name="fingers_actuator" tendon="split" class="finger_actuator"/>
+    <position name="left_finger" joint="hande_left_finger_joint" class="finger_actuator"/>
+    <position name="right_finger" joint="hande_right_finger_joint" class="finger_actuator" forcerange="-1000 1000" kp="800"/>
   </actuator>
 
   <keyframe>
@@ -366,7 +362,7 @@
     <!--
     <key name="HOME_POS"
       qpos="0.55 -0.25 0.12 1 0 0 0 0 -1.5708 1.5708 -1.5708 -1.5708 0 0 0"
-      ctrl="0 -1.5708 1.5708 -1.5708 -1.5708 0 0"/>
+      ctrl="0 -1.5708 1.5708 -1.5708 -1.5708 0 0 0"/>
     -->
     <key name="HOME_POS"
       qpos="0.55 -0.25 0.12 1 0 0 0 -0.718759 -1.42104 2.29354 -2.44326 -1.57083 -0.718761 2.34859e-08 0"

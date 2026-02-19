@@ -2,6 +2,7 @@
 #include "dxMuJoCoRobotSimulator.h"
 
 #include <algorithm>
+#include <cstring>
 #include <cmath>
 #include <cstdio>
 #include <iostream>
@@ -260,6 +261,7 @@ void dxMuJoCoRobotSimulator::lockCurrentPose()
 
 void dxMuJoCoRobotSimulator::closeGripper()
 {
+    std::printf("dxMuJoCoRobotSimulator: closeGripper requested.\n");
     setGripperPosition(1.0);
 }
 
@@ -269,9 +271,14 @@ void dxMuJoCoRobotSimulator::setGripperPosition(double ratio)
     {
         return;
     }
-    const std::vector<int> tendonActuators = getTendonActuatorIndices();
-    if (tendonActuators.empty())
+    std::vector<int> gripperActuators = getTendonActuatorIndices();
+    if (gripperActuators.empty())
     {
+        gripperActuators = getGripperJointActuatorIndices();
+    }
+    if (gripperActuators.empty())
+    {
+        std::printf("dxMuJoCoRobotSimulator: no gripper actuators found.\n");
         return;
     }
 
@@ -283,11 +290,27 @@ void dxMuJoCoRobotSimulator::setGripperPosition(double ratio)
     {
         ratio = 1.0;
     }
+    if (mGripperAutoStopEnabled)
+    {
+        if (mGripperAutoStopEngaged && ratio > 0.0)
+        {
+            return;
+        }
+        if (ratio <= 0.0)
+        {
+            mGripperAutoStopEngaged = false;
+            mGripperAutoStopArmed = false;
+        }
+        else
+        {
+            mGripperAutoStopArmed = true;
+        }
+    }
 
     std::vector<double> targets;
     targets.assign(mData->ctrl, mData->ctrl + mModel->nu);
 
-    for (int aid : tendonActuators)
+    for (int aid : gripperActuators)
     {
         if (aid < 0 || aid >= mModel->nu)
         {
@@ -299,6 +322,12 @@ void dxMuJoCoRobotSimulator::setGripperPosition(double ratio)
             const double lo = mModel->actuator_ctrlrange[2 * aid];
             const double hi = mModel->actuator_ctrlrange[2 * aid + 1];
             target = lo + ratio * (hi - lo);
+            std::printf("dxMuJoCoRobotSimulator: gripper actuator %d ctrlrange [%.6f, %.6f] target %.6f\n",
+                        aid, lo, hi, target);
+        }
+        else
+        {
+            std::printf("dxMuJoCoRobotSimulator: gripper actuator %d target %.6f\n", aid, target);
         }
         targets[static_cast<size_t>(aid)] = target;
     }
@@ -306,18 +335,44 @@ void dxMuJoCoRobotSimulator::setGripperPosition(double ratio)
     std::lock_guard<std::mutex> lock(mTargetMutex);
     if (mHoldMode == HoldMode::HoldJointTargets && !mHoldJointTargets.empty())
     {
-        for (int aid : tendonActuators)
+        std::vector<int> jointOrder(static_cast<size_t>(mModel->njnt), -1);
+        int orderIndex = 0;
+        for (int jid = 0; jid < mModel->njnt; ++jid)
+        {
+            const int type = mModel->jnt_type[jid];
+            if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
+            {
+                continue;
+            }
+            jointOrder[jid] = orderIndex++;
+        }
+
+        for (int aid : gripperActuators)
         {
             if (aid < 0 || aid >= mModel->nu)
             {
                 continue;
             }
             const char* name = mj_id2name(mModel, mjOBJ_ACTUATOR, aid);
-            if (!name)
+            if (name)
+            {
+                mPendingNamedCtrls.emplace_back(name, targets[static_cast<size_t>(aid)]);
+            }
+
+            if (mModel->actuator_trntype[aid] != mjTRN_JOINT)
             {
                 continue;
             }
-            mPendingNamedCtrls.emplace_back(name, targets[static_cast<size_t>(aid)]);
+            const int jid = mModel->actuator_trnid[2 * aid];
+            if (jid < 0 || jid >= mModel->njnt)
+            {
+                continue;
+            }
+            const int idx = jointOrder[jid];
+            if (idx >= 0 && idx < static_cast<int>(mHoldJointTargets.size()))
+            {
+                mHoldJointTargets[static_cast<size_t>(idx)] = targets[static_cast<size_t>(aid)];
+            }
         }
         return;
     }
@@ -341,6 +396,16 @@ void dxMuJoCoRobotSimulator::setEqualityActive(const QString& name, bool active)
         return;
     }
     mData->eq_active[id] = active ? 1 : 0;
+}
+
+void dxMuJoCoRobotSimulator::enableGripperAutoStop(bool enabled)
+{
+    mGripperAutoStopEnabled = enabled;
+    if (!enabled)
+    {
+        mGripperAutoStopArmed = false;
+        mGripperAutoStopEngaged = false;
+    }
 }
 
 void dxMuJoCoRobotSimulator::printContacts(int maxContacts, double minDist)
@@ -609,6 +674,15 @@ void dxMuJoCoRobotSimulator::stepLoop()
     }
 
     mj_step(mModel, mData);
+    if (mGripperAutoStopEnabled && mGripperAutoStopArmed)
+    {
+        if (hasGripperCubeContact())
+        {
+            freezeAtCurrentPose();
+            mGripperAutoStopArmed = false;
+            mGripperAutoStopEngaged = true;
+        }
+    }
     updateStateSnapshot();
     emit stateUpdated();
 }
@@ -856,6 +930,108 @@ std::vector<int> dxMuJoCoRobotSimulator::getTendonActuatorIndices() const
         }
     }
     return indices;
+}
+
+std::vector<int> dxMuJoCoRobotSimulator::getGripperJointActuatorIndices() const
+{
+    std::vector<int> indices;
+    if (!mModel)
+    {
+        return indices;
+    }
+
+    const char* jointNames[] = { "hande_left_finger_joint", "hande_right_finger_joint" };
+    for (int aid = 0; aid < mModel->nu; ++aid)
+    {
+        if (mModel->actuator_trntype[aid] != mjTRN_JOINT)
+        {
+            continue;
+        }
+        const int jid = mModel->actuator_trnid[2 * aid];
+        if (jid < 0 || jid >= mModel->njnt)
+        {
+            continue;
+        }
+        const char* jointName = mj_id2name(mModel, mjOBJ_JOINT, jid);
+        if (!jointName)
+        {
+            continue;
+        }
+        for (const char* target : jointNames)
+        {
+            if (std::strcmp(jointName, target) == 0)
+            {
+                indices.push_back(aid);
+                break;
+            }
+        }
+    }
+    return indices;
+}
+
+bool dxMuJoCoRobotSimulator::hasGripperCubeContact() const
+{
+    if (!mModel || !mData)
+    {
+        return false;
+    }
+    const int cubeId = mj_name2id(mModel, mjOBJ_GEOM, "cube_geom");
+    if (cubeId < 0)
+    {
+        return false;
+    }
+    const int leftBody = mj_name2id(mModel, mjOBJ_BODY, "hande_left_finger");
+    const int rightBody = mj_name2id(mModel, mjOBJ_BODY, "hande_right_finger");
+
+    bool leftTouch = false;
+    bool rightTouch = false;
+    for (int i = 0; i < mData->ncon; ++i)
+    {
+        const mjContact& con = mData->contact[i];
+        int other = -1;
+        if (con.geom1 == cubeId)
+        {
+            other = con.geom2;
+        }
+        else if (con.geom2 == cubeId)
+        {
+            other = con.geom1;
+        }
+        if (other < 0)
+        {
+            continue;
+        }
+        const int otherBody = mModel->geom_bodyid[other];
+        if (otherBody == leftBody)
+        {
+            leftTouch = true;
+        }
+        else if (otherBody == rightBody)
+        {
+            rightTouch = true;
+        }
+        if (leftTouch && rightTouch)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void dxMuJoCoRobotSimulator::freezeAtCurrentPose()
+{
+    if (!mModel || !mData)
+    {
+        return;
+    }
+    const std::vector<double> joints = extractJointPositions();
+    if (joints.empty())
+    {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(mTargetMutex);
+    mHoldJointTargets = joints;
+    mHoldMode = HoldMode::HoldJointTargets;
 }
 
 void dxMuJoCoRobotSimulator::updateStateSnapshot()

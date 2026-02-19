@@ -490,20 +490,20 @@ void demo::testPickAndPlace()
         }
         mTrajectory.push_back(std::move(full));
     }
-    {
-        dxPlannerSimple vizPlanner(mKin.get());
-        if (vizPlanner.init())
-        {
-            emit drawTrajectory(vizPlanner.getTrajAs3DPoints(mTrajectory));
-        }
-    }
+    // {
+    //     dxPlannerSimple vizPlanner(mKin.get());
+    //     if (vizPlanner.init())
+    //     {
+    //         emit drawTrajectory(vizPlanner.getTrajAs3DPoints(mTrajectory));
+    //     }
+    // }
     startTrajectoryPlayback();
     mPickPlaceActive = true;
     mPickPlaceStage = PickPlaceStage::PreGraspMove;
     mPickPlaceCubePose = redcubePos;
     mPickPlacePreGraspPose = preGrasp;
     mPickPlaceMicroLiftPose = microLift;
-    mPickPlaceWaitTicks = 25;
+    mPickPlaceWaitTicks = 100;
 
 }
 
@@ -608,7 +608,17 @@ void demo::advancePickAndPlace()
 
     if (mPickPlaceStage == PickPlaceStage::GraspMove)
     {
-        setGripperPosition(1.0);
+        const std::vector<double>& graspJoints = mTrajectory.back();
+        std::cout << "[testPickAndPlace] grasp joints (rad): ";
+        for (size_t i = 0; i < graspJoints.size(); ++i)
+        {
+            if (i)
+            {
+                std::cout << ", ";
+            }
+            std::cout << graspJoints[i];
+        }
+        std::cout << std::endl;
         mPickPlaceWaitRemaining = mPickPlaceWaitTicks;
         mPickPlaceStage = PickPlaceStage::GripperCloseWait;
         mPickPlaceContactLogPending = true;
@@ -619,6 +629,10 @@ void demo::advancePickAndPlace()
     {
         if (mPickPlaceWaitRemaining > 0)
         {
+            const int elapsed = mPickPlaceWaitTicks - mPickPlaceWaitRemaining + 1;
+            const double ratio = std::min(1.0,
+                                          static_cast<double>(elapsed) / static_cast<double>(mPickPlaceWaitTicks));
+            setGripperPosition(ratio);
             if (mPickPlaceContactLogPending && mPickPlaceWaitRemaining == mPickPlaceWaitTicks / 2 && mSim)
             {
                 QMetaObject::invokeMethod(mSim, "printContactsForGeom", Qt::QueuedConnection,

@@ -54,6 +54,7 @@ public slots:
     void enablePdHold(bool enabled);
     void enableHardLock(bool enabled);
     void lockCurrentPose();
+    void enableGripperAutoStop(bool enabled);
 
 signals:
     void modelLoaded(mjModel* model);
@@ -83,6 +84,9 @@ private:
     void applyJointPositionsDirect(const std::vector<double>& jointPositions, bool onlyActuated = false);
     void applyPdHoldFromJointTargets(const std::vector<double>& jointPositions);
     std::vector<int> getTendonActuatorIndices() const;
+    std::vector<int> getGripperJointActuatorIndices() const;
+    bool hasGripperCubeContact() const;
+    void freezeAtCurrentPose();
     void updateStateSnapshot();
     std::vector<double> extractJointPositions() const;
     std::vector<double> extractJointVelocities() const;
@@ -103,6 +107,9 @@ private:
     double mPdKp = 50.0;
     double mPdKd = 5.0;
     bool mEnableHardLock = true;
+    bool mGripperAutoStopEnabled = true;
+    bool mGripperAutoStopArmed = false;
+    bool mGripperAutoStopEngaged = false;
 
     QString mModelPath;
     bool mPoseApplied = false;
