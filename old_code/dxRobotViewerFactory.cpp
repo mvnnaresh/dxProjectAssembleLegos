@@ -1,6 +1,5 @@
 #include "dxRobotViewerFactory.h"
 
-#include <cstdio>
 #include <new>
 
 #include <mujoco/mujoco.h>
@@ -94,7 +93,6 @@ bool dxRobotViewerFactory::initGLFW()
     glfwSetErrorCallback(&dxRobotViewerFactory::glfwErrorCallback);
     if (!glfwInit())
     {
-        std::fprintf(stderr, "Failed to initialise GLFW.\n");
         return false;
     }
     return true;
@@ -108,7 +106,6 @@ bool dxRobotViewerFactory::createWindow()
     mWindow = glfwCreateWindow(mWidth, mHeight, "DexMan Viewer", nullptr, nullptr);
     if (!mWindow)
     {
-        std::fprintf(stderr, "Failed to create GLFW window.\n");
         glfwTerminate();
         return false;
     }
@@ -132,20 +129,14 @@ bool dxRobotViewerFactory::loadModel()
     mModel = mj_loadXML(mModelPath.c_str(), nullptr, err, sizeof(err));
     if (!mModel)
     {
-        std::fprintf(stderr, "mj_loadXML failed for '%s'\nError: %s\n",
-                     mModelPath.c_str(), err);
         return false;
     }
 
     mData = mj_makeData(mModel);
     if (!mData)
     {
-        std::fprintf(stderr, "mj_makeData failed.\n");
         return false;
     }
-
-    std::printf("MuJoCo version: %s\n", mj_versionString());
-    std::printf("Loaded model: %s\n", mModelPath.c_str());
     return true;
 }
 
@@ -158,7 +149,6 @@ void dxRobotViewerFactory::initVisuals()
 
     if (!mCam || !mOpt || !mScn || !mCon)
     {
-        std::fprintf(stderr, "Failed to allocate visualisation structs.\n");
         return;
     }
 
@@ -288,7 +278,8 @@ void dxRobotViewerFactory::shutdown()
 
 void dxRobotViewerFactory::glfwErrorCallback(int error, const char* desc)
 {
-    std::fprintf(stderr, "GLFW error %d: %s\n", error, desc ? desc : "(null)");
+    (void)error;
+    (void)desc;
 }
 
 dxRobotViewerFactory* dxRobotViewerFactory::self(GLFWwindow* w)

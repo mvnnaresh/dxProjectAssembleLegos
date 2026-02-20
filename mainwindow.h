@@ -33,7 +33,7 @@ private:
     dxMuJoCoRobotSimulator* mSim = nullptr;
     QThread* mSimThread = nullptr;
     std::unique_ptr<demo> mDemo;
-    std::string mModelPath = "models/ur10e_2f85_scene_actuated.xml";
+    std::string mModelPath = "models/ur10e_hande_workbench_scene.xml";
 };
 
 #endif // MAINWINDOW_H

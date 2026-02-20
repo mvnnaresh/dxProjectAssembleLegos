@@ -2,8 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <iostream>
 #include <array>
+#include <cstdio>
 
 namespace
 {
@@ -74,7 +74,6 @@ bool dxPlannerSimple::init(dxKinMuJoCo* kin)
     }
     if (!mKin)
     {
-        std::cerr << "[dxPlannerSimple] Warning: kinematics not set." << std::endl;
         return false;
     }
     return true;
@@ -85,7 +84,6 @@ void dxPlannerSimple::setKinematics(dxKinMuJoCo* kin)
     mKin = kin;
     if (!mKin)
     {
-        std::cerr << "[dxPlannerSimple] Warning: kinematics not set." << std::endl;
     }
 }
 
@@ -185,10 +183,12 @@ std::vector<std::vector<double>> dxPlannerSimple::planJoints(const std::vector<d
         if (mParams.checkCollisions &&
             !mKin->isCollisionFree(point, mParams.collisionDist))
         {
-            std::cerr << "[dxPlannerSimple] Collision detected in joint plan." << std::endl;
+            std::fprintf(stderr,
+                         "[dxPlannerSimple] Joint plan blocked by collision at step %d/%d (minDist=%.6f).\n",
+                         i, steps - 1, mParams.collisionDist);
             if (mParams.debugPaths && mKin)
             {
-                mKin->printContacts(point, 10);
+                mKin->printContacts(point, 5);
             }
             trajectory.clear();
             return trajectory;
@@ -234,7 +234,6 @@ bool dxPlannerSimple::planCartesian(const std::vector<double>& startPose,
     trajectory.clear();
     if (!mKin)
     {
-        std::cerr << "[dxPlannerSimple] Warning: kinematics not set." << std::endl;
         return false;
     }
     if (startPose.size() != 7 || goalPose.size() != 7)
@@ -288,10 +287,12 @@ bool dxPlannerSimple::planCartesian(const std::vector<double>& startPose,
         if (mParams.checkCollisions &&
             !mKin->isCollisionFree(solution, mParams.collisionDist))
         {
-            std::cerr << "[dxPlannerSimple] Collision detected in cartesian plan." << std::endl;
+            std::fprintf(stderr,
+                         "[dxPlannerSimple] Cartesian plan blocked by collision at step %d/%d (minDist=%.6f).\n",
+                         i, steps - 1, mParams.collisionDist);
             if (mParams.debugPaths && mKin)
             {
-                mKin->printContacts(solution, 10);
+                mKin->printContacts(solution, 5);
             }
             trajectory.clear();
             return false;

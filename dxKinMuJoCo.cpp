@@ -2,7 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <iostream>
+#include <cstdio>
 
 namespace
 {
@@ -501,12 +501,11 @@ void dxKinMuJoCo::printContacts(const std::vector<double>& qpos, int maxContacts
     const int ncon = mDataScratch->ncon;
     if (ncon <= 0)
     {
-        std::cerr << "[dxKinMuJoCo] No contacts." << std::endl;
         return;
     }
 
     const int count = std::min(ncon, maxContacts);
-    std::cerr << "[dxKinMuJoCo] Contacts: " << ncon << std::endl;
+    std::fprintf(stderr, "[dxKinMuJoCo] Contacts: %d\n", ncon);
     for (int i = 0; i < count; ++i)
     {
         const mjContact& contact = mDataScratch->contact[i];
@@ -519,15 +518,17 @@ void dxKinMuJoCo::printContacts(const std::vector<double>& qpos, int maxContacts
         const char* b1Name = mj_id2name(mModel, mjOBJ_BODY, b1);
         const char* b2Name = mj_id2name(mModel, mjOBJ_BODY, b2);
 
-        std::cerr << "  - geom1: " << (g1Name ? g1Name : "(unnamed)")
-                  << " (id " << g1 << ", body " << (b1Name ? b1Name : "(unnamed)")
-                  << "), geom2: " << (g2Name ? g2Name : "(unnamed)")
-                  << " (id " << g2 << ", body " << (b2Name ? b2Name : "(unnamed)")
-                  << "), dist=" << contact.dist << std::endl;
+        std::fprintf(stderr,
+                     "  - geom1: %s (body %s), geom2: %s (body %s), dist=%.6f\n",
+                     g1Name ? g1Name : "(unnamed)",
+                     b1Name ? b1Name : "(unnamed)",
+                     g2Name ? g2Name : "(unnamed)",
+                     b2Name ? b2Name : "(unnamed)",
+                     contact.dist);
     }
     if (ncon > count)
     {
-        std::cerr << "  ... (" << (ncon - count) << " more)" << std::endl;
+        std::fprintf(stderr, "  ... (%d more)\n", ncon - count);
     }
 }
 

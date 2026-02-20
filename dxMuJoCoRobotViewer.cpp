@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 
 #include <QMouseEvent>
 #include <QOpenGLFunctions>
@@ -32,15 +31,12 @@ bool dxMuJoCoRobotViewer::loadModel(const std::string& modelPath)
     mModel = mj_loadXML(modelPath.c_str(), nullptr, err, sizeof(err));
     if (!mModel)
     {
-        std::fprintf(stderr, "dxMuJoCoRobotViewer: mj_loadXML failed for '%s'\nError: %s\n",
-                     modelPath.c_str(), err);
         return false;
     }
 
     mData = mj_makeData(mModel);
     if (!mData)
     {
-        std::fprintf(stderr, "dxMuJoCoRobotViewer: mj_makeData failed.\n");
         shutdownModel();
         return false;
     }

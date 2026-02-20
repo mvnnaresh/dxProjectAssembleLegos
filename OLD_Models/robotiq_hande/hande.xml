@@ -131,7 +131,7 @@
                     mass="0.03804"
                     diaginertia="1.22763e-05 1.22763e-05 1.22763e-05"
                 />
-                <joint name="hande_right_finger_joint" axis="-1 0 0" class="finger_slide" />
+                <joint name="hande_right_finger_joint" axis="1 0 0" class="finger_slide" />
                 <geom mesh="right_finger" class="visual" material="gray" />
                 <geom type="box" pos="0.028 0.000009 0.042" size="0.003 0.01 0.005" class="soft" />
                 <geom type="box" pos="0.028 0.000009 0.032" size="0.003 0.01 0.005" class="soft" />

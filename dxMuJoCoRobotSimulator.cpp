@@ -4,8 +4,6 @@
 #include <algorithm>
 #include <cstring>
 #include <cmath>
-#include <cstdio>
-#include <iostream>
 
 namespace
 {
@@ -261,7 +259,6 @@ void dxMuJoCoRobotSimulator::lockCurrentPose()
 
 void dxMuJoCoRobotSimulator::closeGripper()
 {
-    std::printf("dxMuJoCoRobotSimulator: closeGripper requested.\n");
     setGripperPosition(1.0);
 }
 
@@ -278,7 +275,6 @@ void dxMuJoCoRobotSimulator::setGripperPosition(double ratio)
     }
     if (gripperActuators.empty())
     {
-        std::printf("dxMuJoCoRobotSimulator: no gripper actuators found.\n");
         return;
     }
 
@@ -290,23 +286,6 @@ void dxMuJoCoRobotSimulator::setGripperPosition(double ratio)
     {
         ratio = 1.0;
     }
-    if (mGripperAutoStopEnabled)
-    {
-        if (mGripperAutoStopEngaged && ratio > 0.0)
-        {
-            return;
-        }
-        if (ratio <= 0.0)
-        {
-            mGripperAutoStopEngaged = false;
-            mGripperAutoStopArmed = false;
-        }
-        else
-        {
-            mGripperAutoStopArmed = true;
-        }
-    }
-
     std::vector<double> targets;
     targets.assign(mData->ctrl, mData->ctrl + mModel->nu);
 
@@ -322,12 +301,6 @@ void dxMuJoCoRobotSimulator::setGripperPosition(double ratio)
             const double lo = mModel->actuator_ctrlrange[2 * aid];
             const double hi = mModel->actuator_ctrlrange[2 * aid + 1];
             target = lo + ratio * (hi - lo);
-            std::printf("dxMuJoCoRobotSimulator: gripper actuator %d ctrlrange [%.6f, %.6f] target %.6f\n",
-                        aid, lo, hi, target);
-        }
-        else
-        {
-            std::printf("dxMuJoCoRobotSimulator: gripper actuator %d target %.6f\n", aid, target);
         }
         targets[static_cast<size_t>(aid)] = target;
     }
@@ -383,120 +356,16 @@ void dxMuJoCoRobotSimulator::setGripperPosition(double ratio)
     mHoldMode = HoldMode::HoldCtrlTargets;
 }
 
-void dxMuJoCoRobotSimulator::setEqualityActive(const QString& name, bool active)
-{
-    if (!mModel || !mData || name.isEmpty())
-    {
-        return;
-    }
-    const std::string stdName = name.toStdString();
-    const int id = mj_name2id(mModel, mjOBJ_EQUALITY, stdName.c_str());
-    if (id < 0 || id >= mModel->neq)
-    {
-        return;
-    }
-    mData->eq_active[id] = active ? 1 : 0;
-}
-
-void dxMuJoCoRobotSimulator::enableGripperAutoStop(bool enabled)
-{
-    mGripperAutoStopEnabled = enabled;
-    if (!enabled)
-    {
-        mGripperAutoStopArmed = false;
-        mGripperAutoStopEngaged = false;
-    }
-}
-
 void dxMuJoCoRobotSimulator::printContacts(int maxContacts, double minDist)
 {
-    if (!mModel || !mData)
-    {
-        return;
-    }
-    if (maxContacts <= 0)
-    {
-        return;
-    }
-
-    const int ncon = mData->ncon;
-    std::cerr << "[contacts] count=" << ncon << std::endl;
-    const int count = std::min(ncon, maxContacts);
-    for (int i = 0; i < count; ++i)
-    {
-        const mjContact& contact = mData->contact[i];
-        if (contact.dist > minDist)
-        {
-            continue;
-        }
-        const int g1 = contact.geom1;
-        const int g2 = contact.geom2;
-        const int b1 = (g1 >= 0 && g1 < mModel->ngeom) ? mModel->geom_bodyid[g1] : -1;
-        const int b2 = (g2 >= 0 && g2 < mModel->ngeom) ? mModel->geom_bodyid[g2] : -1;
-        const char* g1Name = mj_id2name(mModel, mjOBJ_GEOM, g1);
-        const char* g2Name = mj_id2name(mModel, mjOBJ_GEOM, g2);
-        const char* b1Name = mj_id2name(mModel, mjOBJ_BODY, b1);
-        const char* b2Name = mj_id2name(mModel, mjOBJ_BODY, b2);
-
-        mjtNum forces[6] = { 0 };
-        mj_contactForce(mModel, mData, i, forces);
-
-        std::cerr << "  - geom1: " << (g1Name ? g1Name : "(unnamed)")
-                  << " (body " << (b1Name ? b1Name : "(unnamed)") << ")"
-                  << ", geom2: " << (g2Name ? g2Name : "(unnamed)")
-                  << " (body " << (b2Name ? b2Name : "(unnamed)") << ")"
-                  << ", dist=" << contact.dist
-                  << ", fn=" << forces[0] << std::endl;
-    }
+    (void)maxContacts;
+    (void)minDist;
 }
 
 void dxMuJoCoRobotSimulator::printContactsForGeom(const QString& geomName, double minDist)
 {
-    if (!mModel || !mData || geomName.isEmpty())
-    {
-        return;
-    }
-    const std::string name = geomName.toStdString();
-    const int gid = mj_name2id(mModel, mjOBJ_GEOM, name.c_str());
-    if (gid < 0 || gid >= mModel->ngeom)
-    {
-        std::cerr << "[contacts] geom not found: " << name << std::endl;
-        return;
-    }
-
-    const int ncon = mData->ncon;
-    std::cerr << "[contacts] geom=" << name << " count=" << ncon << std::endl;
-    for (int i = 0; i < ncon; ++i)
-    {
-        const mjContact& contact = mData->contact[i];
-        if (contact.dist > minDist)
-        {
-            continue;
-        }
-        if (contact.geom1 != gid && contact.geom2 != gid)
-        {
-            continue;
-        }
-
-        const int g1 = contact.geom1;
-        const int g2 = contact.geom2;
-        const int b1 = (g1 >= 0 && g1 < mModel->ngeom) ? mModel->geom_bodyid[g1] : -1;
-        const int b2 = (g2 >= 0 && g2 < mModel->ngeom) ? mModel->geom_bodyid[g2] : -1;
-        const char* g1Name = mj_id2name(mModel, mjOBJ_GEOM, g1);
-        const char* g2Name = mj_id2name(mModel, mjOBJ_GEOM, g2);
-        const char* b1Name = mj_id2name(mModel, mjOBJ_BODY, b1);
-        const char* b2Name = mj_id2name(mModel, mjOBJ_BODY, b2);
-
-        mjtNum forces[6] = { 0 };
-        mj_contactForce(mModel, mData, i, forces);
-
-        std::cerr << "  - geom1: " << (g1Name ? g1Name : "(unnamed)")
-                  << " (body " << (b1Name ? b1Name : "(unnamed)") << ")"
-                  << ", geom2: " << (g2Name ? g2Name : "(unnamed)")
-                  << " (body " << (b2Name ? b2Name : "(unnamed)") << ")"
-                  << ", dist=" << contact.dist
-                  << ", fn=" << forces[0] << std::endl;
-    }
+    (void)geomName;
+    (void)minDist;
 }
 
 void dxMuJoCoRobotSimulator::loadModel(const QString& modelPath)
@@ -674,15 +543,6 @@ void dxMuJoCoRobotSimulator::stepLoop()
     }
 
     mj_step(mModel, mData);
-    if (mGripperAutoStopEnabled && mGripperAutoStopArmed)
-    {
-        if (hasGripperCubeContact())
-        {
-            freezeAtCurrentPose();
-            mGripperAutoStopArmed = false;
-            mGripperAutoStopEngaged = true;
-        }
-    }
     updateStateSnapshot();
     emit stateUpdated();
 }
@@ -969,71 +829,6 @@ std::vector<int> dxMuJoCoRobotSimulator::getGripperJointActuatorIndices() const
     return indices;
 }
 
-bool dxMuJoCoRobotSimulator::hasGripperCubeContact() const
-{
-    if (!mModel || !mData)
-    {
-        return false;
-    }
-    const int cubeId = mj_name2id(mModel, mjOBJ_GEOM, "cube_geom");
-    if (cubeId < 0)
-    {
-        return false;
-    }
-    const int leftBody = mj_name2id(mModel, mjOBJ_BODY, "hande_left_finger");
-    const int rightBody = mj_name2id(mModel, mjOBJ_BODY, "hande_right_finger");
-
-    bool leftTouch = false;
-    bool rightTouch = false;
-    for (int i = 0; i < mData->ncon; ++i)
-    {
-        const mjContact& con = mData->contact[i];
-        int other = -1;
-        if (con.geom1 == cubeId)
-        {
-            other = con.geom2;
-        }
-        else if (con.geom2 == cubeId)
-        {
-            other = con.geom1;
-        }
-        if (other < 0)
-        {
-            continue;
-        }
-        const int otherBody = mModel->geom_bodyid[other];
-        if (otherBody == leftBody)
-        {
-            leftTouch = true;
-        }
-        else if (otherBody == rightBody)
-        {
-            rightTouch = true;
-        }
-        if (leftTouch && rightTouch)
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-void dxMuJoCoRobotSimulator::freezeAtCurrentPose()
-{
-    if (!mModel || !mData)
-    {
-        return;
-    }
-    const std::vector<double> joints = extractJointPositions();
-    if (joints.empty())
-    {
-        return;
-    }
-    std::lock_guard<std::mutex> lock(mTargetMutex);
-    mHoldJointTargets = joints;
-    mHoldMode = HoldMode::HoldJointTargets;
-}
-
 void dxMuJoCoRobotSimulator::updateStateSnapshot()
 {
     dxMuJoCoRobotState snapshot;
@@ -1148,126 +943,9 @@ bool dxMuJoCoRobotSimulator::applyPoseByName(const char* poseName)
 
 void dxMuJoCoRobotSimulator::printPoseSummary(const char* poseName) const
 {
-    if (!mModel || !mData)
-    {
-        return;
-    }
-    const char* jointNames[6] =
-    {
-        "shoulder_pan_joint",
-        "shoulder_lift_joint",
-        "elbow_joint",
-        "wrist_1_joint",
-        "wrist_2_joint",
-        "wrist_3_joint"
-    };
-
-    std::printf("  Pose       : %s\n", poseName ? poseName : "(unnamed)");
-    std::printf("  curr_q_pos (deg) = (");
-    bool first = true;
-    for (int i = 0; i < 6; ++i)
-    {
-        const int jid = mj_name2id(mModel, mjOBJ_JOINT, jointNames[i]);
-        if (jid < 0)
-        {
-            continue;
-        }
-        const int qposAdr = mModel->jnt_qposadr[jid];
-        if (qposAdr < 0 || qposAdr >= mModel->nq)
-        {
-            continue;
-        }
-        const double deg = mData->qpos[qposAdr] * 180.0 / 3.141592653589793;
-        if (!first)
-        {
-            std::printf(", ");
-        }
-        std::printf("%.2f", deg);
-        first = false;
-    }
-    std::printf(")\n");
+    (void)poseName;
 }
 
 void dxMuJoCoRobotSimulator::printDetails() const
 {
-    if (!mModel || !mData)
-    {
-        std::printf("dxMuJoCoRobotSimulator: no model/data loaded.\n");
-        return;
-    }
-
-    const std::string modelName = mModelPath.toStdString();
-
-    int robotDof = 0;
-    int gripperDof = 0;
-    const char* robotJoints[6] =
-    {
-        "shoulder_pan_joint",
-        "shoulder_lift_joint",
-        "elbow_joint",
-        "wrist_1_joint",
-        "wrist_2_joint",
-        "wrist_3_joint"
-    };
-    const char* gripperJoints[4] =
-    {
-        "hande_left_finger_joint",
-        "hande_right_finger_joint",
-        "left_finger_slide",
-        "right_finger_slide"
-    };
-
-    for (int i = 0; i < 6; ++i)
-        if (mj_name2id(mModel, mjOBJ_JOINT, robotJoints[i]) >= 0)
-        {
-            ++robotDof;
-        }
-    for (int i = 0; i < 4; ++i)
-        if (mj_name2id(mModel, mjOBJ_JOINT, gripperJoints[i]) >= 0)
-        {
-            ++gripperDof;
-        }
-
-    const char* toolName = "none";
-    if (mj_name2id(mModel, mjOBJ_BODY, "hande") >= 0)
-    {
-        toolName = "Robotiq Hand-E";
-    }
-    else if (mj_name2id(mModel, mjOBJ_BODY, "gripper_base") >= 0)
-    {
-        toolName = "Generic gripper";
-    }
-
-    std::printf("=== Simulator Info ===\n");
-    std::printf("  Robot      : %s\n", modelName.c_str());
-    std::printf("  Tool       : %s\n", toolName);
-    std::printf("  DoF\n");
-    std::printf("    Robot    : %d\n", robotDof);
-    std::printf("    Gripper  : %d\n", gripperDof);
-    std::printf("  Totals\n");
-    std::printf("    Joints   : %d\n", mModel->njnt);
-    std::printf("    Cameras  : %d", mModel->ncam);
-    if (mModel->ncam > 0)
-    {
-        std::printf(" (");
-        for (int i = 0; i < mModel->ncam; ++i)
-        {
-            const char* name = mj_id2name(mModel, mjOBJ_CAMERA, i);
-            if (i > 0)
-            {
-                std::printf(", ");
-            }
-            std::printf("%s", name ? name : "unnamed");
-        }
-        std::printf(")");
-    }
-    std::printf("\n");
-    if (mPoseApplied)
-    {
-        std::printf("  Pose       : %s\n", mPoseAppliedName.c_str());
-    }
-    else
-    {
-        std::printf("  Pose       : none\n");
-    }
 }

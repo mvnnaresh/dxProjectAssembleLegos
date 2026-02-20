@@ -107,7 +107,6 @@ target_include_directories(dxProjectAssembleLegos PRIVATE
   ${Boost_INCLUDE_DIRS}
   ${VISP_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIR}
-  ${OpenCV_INCLUDE_DIRS}
 )
 
 target_link_libraries(dxProjectAssembleLegos PRIVATE
@@ -117,7 +116,6 @@ target_link_libraries(dxProjectAssembleLegos PRIVATE
   ${Boost_LIBRARIES}
   ${VISP_LIBRARIES}
   ${QT_LIBRARIES}
-  ${OpenCV_LIBS}
 )
 
 
