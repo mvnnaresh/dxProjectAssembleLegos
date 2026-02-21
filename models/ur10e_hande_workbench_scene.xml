@@ -42,11 +42,11 @@
       <joint frictionloss="1" armature="0.1" />
       <position kp="800" />
       <default class="hande_finger_slide">
-        <joint type="slide" damping="1" stiffness="10" range="0.001 0.03" />
-        <position kp="300" dampratio="1" ctrlrange="0 0.03" forcerange="-5000 5000" />
+        <joint type="slide" damping="1" stiffness="10" range="0.001 0.05" />
+        <position kp="300" dampratio="1" ctrlrange="0 0.05" forcerange="-5000 5000" />
       </default>
       <default class="hande_finger_actuator">
-        <position ctrlrange="0 0.03" forcerange="-5000 5000" kp="200" dampratio="5" />
+        <position ctrlrange="0 0.05" forcerange="-5000 5000" kp="200" dampratio="5" />
       </default>
       <default class="hande_gripper_slide">
         <joint type="slide" damping="100" range="-1.2 1.2" />
@@ -126,6 +126,7 @@
          ============================================================ -->
     <body name="mobile_workstation" pos="0.45 0 -0.89">
       <geom name="workstation_top" type="box" size="0.7025 0.455 0.02" pos="0 0 0.87" material="table_top" />
+      <geom name="workstation_pad" type="box" size="0.69 0.44 0.003" pos="0 0 0.893" material="table_top" />
       <geom name="workstation_top_slat_1" type="box" size="0.7025 0.01 0.003" pos="0 -0.39 0.891" material="table_frame" />
       <geom name="workstation_top_slat_2" type="box" size="0.7025 0.01 0.003" pos="0 -0.31 0.891" material="table_frame" />
       <geom name="workstation_top_slat_3" type="box" size="0.7025 0.01 0.003" pos="0 -0.23 0.891" material="table_frame" />
@@ -170,8 +171,8 @@
       <freejoint/>
       <geom name="grasp_cube_geom"
             type="box"
-            size="0.025 0.025 0.025"
-            mass="0.20"
+            size="0.022 0.022 0.022"
+            mass="0.001"
             rgba="0.9 0.2 0.2 1"/>
     </body>
     <!-- ============================================================
@@ -287,7 +288,7 @@
     <general class="size2" name="wrist_2" joint="wrist_2_joint" />
     <general class="size2" name="wrist_3" joint="wrist_3_joint" />
     <position name="left_finger" joint="hande_left_finger_joint" class="hande_finger_actuator" />
-    <position name="right_finger" joint="hande_right_finger_joint" class="hande_finger_actuator" forcerange="-1000 1000" kp="800" />
+    <position name="right_finger" joint="hande_right_finger_joint" class="hande_finger_actuator" />
   </actuator>
   <contact>
     <exclude body1="hande" body2="hande_left_finger" />
