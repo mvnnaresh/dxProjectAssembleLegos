@@ -2,8 +2,10 @@
 
 #include <unordered_set>
 #include <cstring>
-
+#include <iostream>
+#include <QEventLoop>
 #include <QMetaObject>
+#include <QTimer>
 
 #include "dxKinMuJoCo.h"
 #include "dxPlannerSimple.h"
@@ -31,6 +33,7 @@ demo::demo(dxMuJoCoRobotSimulator* simulator, QObject* parent)
             if (mEndBehavior == EndBehavior::StopCommands)
             {
                 mTrajectoryTimer->stop();
+                emit trajectoryFinished();
                 return;
             }
 
@@ -40,7 +43,7 @@ demo::demo(dxMuJoCoRobotSimulator* simulator, QObject* parent)
         }
 
         if (mGripperEventIndex < mGripperEvents.size() &&
-            mTrajectoryIndex == mGripperEvents[mGripperEventIndex].first)
+                mTrajectoryIndex == mGripperEvents[mGripperEventIndex].first)
         {
             const double value = mGripperEvents[mGripperEventIndex].second;
             emit gripperPositionRequested(value);
@@ -56,6 +59,14 @@ demo::demo(dxMuJoCoRobotSimulator* simulator, QObject* parent)
 
         const std::vector<double>& joints = mTrajectory[mTrajectoryIndex++];
         emit ctrlTargetsFromJointsReady(joints);
+    });
+
+    connect(this, &demo::trajectoryFinished, this, [this]()
+    {
+        if (mPickPlace2Active)
+        {
+            advancePickPlace2();
+        }
     });
 }
 
@@ -507,7 +518,7 @@ void demo::testPickAndPlace()
             for (int idx : mGripperDofIndices)
             {
                 if (idx >= 0 && static_cast<size_t>(idx) < point.size() &&
-                    static_cast<size_t>(idx) < seed.size())
+                        static_cast<size_t>(idx) < seed.size())
                 {
                     point[static_cast<size_t>(idx)] = seed[static_cast<size_t>(idx)];
                 }
@@ -582,6 +593,291 @@ void demo::testPickAndPlace()
     startTrajectoryPlayback();
 }
 
+void demo::testPickAndPlace2()
+{
+    if (!mSim || !mSim->model() || !mKin)
+    {
+        return;
+    }
+
+    const dxMuJoCoRobotState state = mSim->getRobotState();
+    if (state.jointConf.empty())
+    {
+        return;
+    }
+
+    std::vector<double> cubePose = mSim->getBodyPoseByName("grasp_cube");
+    if (cubePose.empty())
+    {
+        cubePose = mSim->getBodyPoseByName("cube");
+    }
+    if (cubePose.empty())
+    {
+        cubePose = mSim->getBodyPoseByName("object");
+    }
+    if (cubePose.size() < 3)
+    {
+        return;
+    }
+
+    const double cubeX = cubePose[0];
+    const double cubeY = cubePose[1];
+    const double cubeZ = cubePose[2];
+
+    const double pregraspZ = cubeZ + 0.10;
+    const double graspZ = cubeZ + 0.02;
+    const double liftZ = cubeZ + 0.12;
+    const double placeX = cubeX + 0.20;
+    const double placeY = cubeY;
+
+    auto makePose = [&](double x, double y, double z)
+    {
+        return std::vector<double>
+        {
+            x, y, z,
+            state.eeQuat[0], state.eeQuat[1], state.eeQuat[2], state.eeQuat[3]
+        };
+    };
+
+    const std::vector<double> pregraspPose = makePose(cubeX, cubeY, pregraspZ);
+    const std::vector<double> graspPose = makePose(cubeX, cubeY, graspZ);
+    const std::vector<double> liftPose = makePose(cubeX, cubeY, liftZ);
+    const std::vector<double> placeAbovePose = makePose(placeX, placeY, liftZ);
+    const std::vector<double> placePose = makePose(placeX, placeY, graspZ);
+
+    mPickPlace2Steps.clear();
+    mPickPlace2Steps.push_back({ PickPlaceStep::Type::GripperOpen, {}, 0, 0 });
+    mPickPlace2Steps.push_back({ PickPlaceStep::Type::Move, pregraspPose, 60, 0 });
+    mPickPlace2Steps.push_back({ PickPlaceStep::Type::Move, graspPose, 40, 0 });
+    mPickPlace2Steps.push_back({ PickPlaceStep::Type::GripperClose, {}, 0, 0 });
+    mPickPlace2Steps.push_back({ PickPlaceStep::Type::Hold, {}, 0, 25 });
+    mPickPlace2Steps.push_back({ PickPlaceStep::Type::Move, liftPose, 40, 0 });
+    mPickPlace2Steps.push_back({ PickPlaceStep::Type::Move, placeAbovePose, 60, 0 });
+    mPickPlace2Steps.push_back({ PickPlaceStep::Type::Move, placePose, 40, 0 });
+    mPickPlace2Steps.push_back({ PickPlaceStep::Type::GripperOpen, {}, 0, 0 });
+    mPickPlace2Steps.push_back({ PickPlaceStep::Type::Hold, {}, 0, 20 });
+
+    mPickPlace2Index = 0;
+    mPickPlace2Active = true;
+    advancePickPlace2();
+}
+
+void demo::testPickAndPlace3()
+{
+    if (!mSim || !mSim->model() || !mKin)
+    {
+        return;
+    }
+
+    const dxMuJoCoRobotState state = mSim->getRobotState();
+    if (state.jointConf.empty())
+    {
+        return;
+    }
+
+    std::vector<double> cubePose = mSim->getBodyPoseByName("grasp_cube");
+    const double cubeX = cubePose[0];
+    const double cubeY = cubePose[1];
+    const double cubeZ = cubePose[2];
+
+    const double pregraspZ = cubeZ + 0.10;
+    const double graspZ = cubeZ + 0.02;
+    const double liftZ = cubeZ + 0.12;
+    const double placeX = cubeX + 0.20;
+    const double placeY = cubeY;
+    const double placeZ = cubeZ + 0.04;
+
+    auto makePose = [&](double x, double y, double z)
+    {
+        return std::vector<double>
+        {
+            x, y, z,
+            state.eeQuat[0], state.eeQuat[1], state.eeQuat[2], state.eeQuat[3]
+        };
+    };
+
+    const std::vector<double> startPose =
+    {
+        state.eePos[0], state.eePos[1], state.eePos[2],
+        state.eeQuat[0], state.eeQuat[1], state.eeQuat[2], state.eeQuat[3]
+    };
+    const std::vector<double> pregraspPose = makePose(cubeX, cubeY, pregraspZ);
+    const std::vector<double> graspPose = makePose(cubeX, cubeY, graspZ);
+    const std::vector<double> preplacePose = makePose(placeX, placeY, liftZ);
+    const std::vector<double> placePose = makePose(placeX, placeY, placeZ);
+
+    openGripper();
+    waitSteps(10);
+
+    sendRobotTo(startPose, pregraspPose, 60);
+    std::cout << "[testPickAndPlace3] reached pregrasp" << std::endl;
+
+    sendRobotTo(pregraspPose, graspPose, 40);
+    std::cout << "[testPickAndPlace3] reached grasp" << std::endl;
+
+    closeGripper();
+    waitSteps(25);
+
+    sendRobotTo(graspPose, pregraspPose, 40);
+    std::cout << "[testPickAndPlace3] returned to pregrasp" << std::endl;
+
+    sendRobotTo(pregraspPose, preplacePose, 60);
+    std::cout << "[testPickAndPlace3] reached preplace" << std::endl;
+
+    sendRobotTo(preplacePose, placePose, 40);
+    std::cout << "[testPickAndPlace3] reached place" << std::endl;
+
+    openGripper();
+    waitSteps(40);
+
+    sendRobotTo(placePose, preplacePose, 40);
+    std::cout << "[testPickAndPlace3] returned to preplace" << std::endl;
+}
+
+void demo::advancePickPlace2()
+{
+    if (!mPickPlace2Active)
+    {
+        return;
+    }
+    if (mPickPlace2Index >= mPickPlace2Steps.size())
+    {
+        mPickPlace2Active = false;
+        return;
+    }
+
+    const PickPlaceStep step = mPickPlace2Steps[mPickPlace2Index++];
+    switch (step.type)
+    {
+    case PickPlaceStep::Type::GripperOpen:
+        emit gripperPositionRequested(kGripperOpenRatio);
+        advancePickPlace2();
+        return;
+    case PickPlaceStep::Type::GripperClose:
+        emit gripperPositionRequested(kGripperCloseRatio);
+        advancePickPlace2();
+        return;
+    case PickPlaceStep::Type::Hold:
+    {
+        const dxMuJoCoRobotState state = mSim->getRobotState();
+        if (state.jointConf.empty())
+        {
+            mPickPlace2Active = false;
+            return;
+        }
+        mTrajectory.assign(static_cast<size_t>(step.holdSteps), state.jointConf);
+        mGripperEvents.clear();
+        startTrajectoryPlayback();
+        return;
+    }
+    case PickPlaceStep::Type::Move:
+    default:
+        break;
+    }
+
+    const dxMuJoCoRobotState state = mSim->getRobotState();
+    if (state.jointConf.empty())
+    {
+        mPickPlace2Active = false;
+        return;
+    }
+
+    const std::vector<double> startPose =
+    {
+        state.eePos[0], state.eePos[1], state.eePos[2],
+        state.eeQuat[0], state.eeQuat[1], state.eeQuat[2], state.eeQuat[3]
+    };
+
+    std::vector<std::vector<double>> trajectory;
+    if (!planCartesianTo(startPose, step.pose, trajectory, step.steps))
+    {
+        mPickPlace2Active = false;
+        return;
+    }
+    if (trajectory.empty())
+    {
+        mPickPlace2Active = false;
+        return;
+    }
+
+    mTrajectory = std::move(trajectory);
+    mGripperEvents.clear();
+    startTrajectoryPlayback();
+}
+
+bool demo::sendRobotTo(const std::vector<double>& fromPose,
+                       const std::vector<double>& toPose,
+                       int steps)
+{
+    std::vector<std::vector<double>> trajectory;
+    if (!planCartesianTo(fromPose, toPose, trajectory, steps))
+    {
+        return false;
+    }
+    if (trajectory.empty())
+    {
+        return false;
+    }
+
+    const dxMuJoCoRobotState holdState = mSim->getRobotState();
+    for (auto& point : trajectory)
+    {
+        for (int idx : mGripperDofIndices)
+        {
+            if (idx >= 0 && static_cast<size_t>(idx) < point.size() &&
+                    static_cast<size_t>(idx) < holdState.jointConf.size())
+            {
+                point[static_cast<size_t>(idx)] = holdState.jointConf[static_cast<size_t>(idx)];
+            }
+        }
+    }
+
+    mTrajectory = std::move(trajectory);
+    mGripperEvents.clear();
+    if (mGripperHoldEnabled)
+    {
+        mGripperEvents.emplace_back(0, mGripperHoldRatio);
+    }
+
+    QEventLoop loop;
+    const QMetaObject::Connection conn = connect(this, &demo::trajectoryFinished, &loop, &QEventLoop::quit);
+    startTrajectoryPlayback();
+    loop.exec();
+    disconnect(conn);
+    return true;
+}
+
+void demo::waitSteps(int holdSteps)
+{
+    const dxMuJoCoRobotState holdState = mSim->getRobotState();
+    if (holdState.jointConf.empty())
+    {
+        return;
+    }
+
+    mTrajectory.assign(static_cast<size_t>(std::max(1, holdSteps)), holdState.jointConf);
+    mGripperEvents.clear();
+    if (mGripperHoldEnabled)
+    {
+        mGripperEvents.emplace_back(0, mGripperHoldRatio);
+    }
+
+    QEventLoop loop;
+    const QMetaObject::Connection conn = connect(this, &demo::trajectoryFinished, &loop, &QEventLoop::quit);
+    startTrajectoryPlayback();
+    loop.exec();
+    disconnect(conn);
+}
+
+void demo::setGripperHoldRatio(double ratio)
+{
+    mGripperHoldEnabled = true;
+    mGripperHoldRatio = ratio;
+    emit gripperPositionRequested(ratio);
+}
+
+
+
 
 bool demo::planCartesianTo(const std::vector<double>& startPose,
                            const std::vector<double>& goalPose,
@@ -614,16 +910,14 @@ bool demo::planCartesianTo(const std::vector<double>& startPose,
 }
 
 
-
-
 void demo::closeGripper()
 {
-    setGripperPosition(kGripperCloseRatio);
+    setGripperHoldRatio(kGripperCloseRatio);
 }
 
 void demo::openGripper()
 {
-    setGripperPosition(kGripperOpenRatio);
+    setGripperHoldRatio(kGripperOpenRatio);
 }
 
 void demo::setGripperPosition(double ratio)

@@ -31,6 +31,8 @@ public:
 
     void testPlannerCartesian();
     void testPickAndPlace();
+    void testPickAndPlace2();
+    void testPickAndPlace3();
 
     void closeGripper();
     void openGripper();
@@ -41,7 +43,7 @@ public:
 signals:
     void ctrlTargetsReady(const std::vector<double>& targets);
 
-    void jointPositionsReady(const std::vector<double>& joints);
+    void updateJointConfig(const std::vector<double>& joints);
 
     void ctrlTargetsFromJointsReady(const std::vector<double>& joints);
 
@@ -49,6 +51,7 @@ signals:
     void drawFrames(const std::vector<std::array<double, 12>>& frames);
     void closeGripperRequested();
     void gripperPositionRequested(double ratio);
+    void trajectoryFinished();
 
 private:
     void startTrajectoryPlayback();
@@ -62,6 +65,12 @@ private:
                          std::vector<std::vector<double>>& trajectory,
                          int steps);
     bool buildPoseFromJoints(const std::vector<double>& joints, std::vector<double>& outPose);
+    void advancePickPlace2();
+    bool sendRobotTo(const std::vector<double>& fromPose,
+                     const std::vector<double>& toPose,
+                     int steps);
+    void waitSteps(int holdSteps);
+    void setGripperHoldRatio(double ratio);
 
     dxMuJoCoRobotSimulator* mSim = nullptr;
 
@@ -78,4 +87,27 @@ private:
     std::vector<int> mGripperDofIndices;
 
     std::unique_ptr<dxKinMuJoCo> mKin;
+
+    bool mGripperHoldEnabled = false;
+    double mGripperHoldRatio = 0.0;
+
+    struct PickPlaceStep
+    {
+        enum class Type
+        {
+            Move,
+            GripperOpen,
+            GripperClose,
+            Hold
+        };
+
+        Type type = Type::Move;
+        std::vector<double> pose;
+        int steps = 0;
+        int holdSteps = 0;
+    };
+
+    std::vector<PickPlaceStep> mPickPlace2Steps;
+    size_t mPickPlace2Index = 0;
+    bool mPickPlace2Active = false;
 };

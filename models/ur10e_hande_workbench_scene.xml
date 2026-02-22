@@ -171,7 +171,7 @@
       <freejoint/>
       <geom name="grasp_cube_geom"
             type="box"
-            size="0.022 0.022 0.022"
+            size="0.018 0.018 0.018"
             mass="0.001"
             rgba="0.9 0.2 0.2 1"/>
     </body>
