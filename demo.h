@@ -31,7 +31,6 @@ public:
 
     void testPlannerCartesian();
     void testPickAndPlace();
-    void testPickAndPlace2();
     void testPickAndPlace3();
 
     void closeGripper();
@@ -65,7 +64,6 @@ private:
                          std::vector<std::vector<double>>& trajectory,
                          int steps);
     bool buildPoseFromJoints(const std::vector<double>& joints, std::vector<double>& outPose);
-    void advancePickPlace2();
     bool sendRobotTo(const std::vector<double>& fromPose,
                      const std::vector<double>& toPose,
                      int steps);
@@ -91,23 +89,4 @@ private:
     bool mGripperHoldEnabled = false;
     double mGripperHoldRatio = 0.0;
 
-    struct PickPlaceStep
-    {
-        enum class Type
-        {
-            Move,
-            GripperOpen,
-            GripperClose,
-            Hold
-        };
-
-        Type type = Type::Move;
-        std::vector<double> pose;
-        int steps = 0;
-        int holdSteps = 0;
-    };
-
-    std::vector<PickPlaceStep> mPickPlace2Steps;
-    size_t mPickPlace2Index = 0;
-    bool mPickPlace2Active = false;
 };
