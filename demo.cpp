@@ -75,7 +75,8 @@ bool demo::init()
     mSim->enablePdHold(false);
 
     mKin = std::make_unique<dxKinMuJoCo>(mSim->model(), mSim->data());
-    buildDofGroups();
+
+    emit updateUIMessage("Demo Initalised!!");
     return true;
 }
 
@@ -99,83 +100,35 @@ void demo::startTrajectoryPlayback()
     }
 }
 
-void demo::buildDofGroups()
-{
-    mArmDofIndices.clear();
-    mGripperDofIndices.clear();
-
-    if (!mSim || !mSim->model())
-    {
-        return;
-    }
-
-    mjModel* model = mSim->model();
-    std::vector<bool> jointActuated(static_cast<size_t>(model->njnt), false);
-    for (int aid = 0; aid < model->nu; ++aid)
-    {
-        if (model->actuator_trntype[aid] != mjTRN_JOINT)
-        {
-            continue;
-        }
-        const int jid = model->actuator_trnid[2 * aid];
-        if (jid >= 0 && jid < model->njnt)
-        {
-            jointActuated[static_cast<size_t>(jid)] = true;
-        }
-    }
-
-    int dofIndex = 0;
-    for (int jid = 0; jid < model->njnt; ++jid)
-    {
-        const int type = model->jnt_type[jid];
-        if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
-        {
-            continue;
-        }
-
-        const char* jointName = mj_id2name(model, mjOBJ_JOINT, jid);
-        const bool isFinger = jointName && std::strstr(jointName, "finger");
-        if (isFinger)
-        {
-            mGripperDofIndices.push_back(dofIndex);
-        }
-        else if (jointActuated[static_cast<size_t>(jid)])
-        {
-            mArmDofIndices.push_back(dofIndex);
-        }
-        ++dofIndex;
-    }
-}
-
-std::vector<double> demo::extractArmDof(const std::vector<double>& dofQpos) const
-{
-    std::vector<double> out;
-    out.reserve(mArmDofIndices.size());
-    for (int idx : mArmDofIndices)
-    {
-        if (idx >= 0 && static_cast<size_t>(idx) < dofQpos.size())
-        {
-            out.push_back(dofQpos[static_cast<size_t>(idx)]);
-        }
-    }
-    return out;
-}
-
-std::vector<double> demo::expandArmDof(const std::vector<double>& baseDof,
-                                       const std::vector<double>& armDof) const
-{
-    std::vector<double> out = baseDof;
-    const size_t limit = std::min(mArmDofIndices.size(), armDof.size());
-    for (size_t i = 0; i < limit; ++i)
-    {
-        const int idx = mArmDofIndices[i];
-        if (idx >= 0 && static_cast<size_t>(idx) < out.size())
-        {
-            out[static_cast<size_t>(idx)] = armDof[i];
-        }
-    }
-    return out;
-}
+//std::vector<double> demo::extractArmDof(const std::vector<double>& dofQpos) const
+//{
+//    std::vector<double> out;
+//    out.reserve(mArmDofIndices.size());
+//    for (int idx : mArmDofIndices)
+//    {
+//        if (idx >= 0 && static_cast<size_t>(idx) < dofQpos.size())
+//        {
+//            out.push_back(dofQpos[static_cast<size_t>(idx)]);
+//        }
+//    }
+//    return out;
+//}
+//
+//std::vector<double> demo::expandArmDof(const std::vector<double>& baseDof,
+//                                       const std::vector<double>& armDof) const
+//{
+//    std::vector<double> out = baseDof;
+//    const size_t limit = std::min(mArmDofIndices.size(), armDof.size());
+//    for (size_t i = 0; i < limit; ++i)
+//    {
+//        const int idx = mArmDofIndices[i];
+//        if (idx >= 0 && static_cast<size_t>(idx) < out.size())
+//        {
+//            out[static_cast<size_t>(idx)] = armDof[i];
+//        }
+//    }
+//    return out;
+//}
 
 // Validate FK/IK by computing the current pose and attempting to solve IK back to it.
 void demo::testKinematics()
@@ -228,91 +181,55 @@ void demo::testKinematics()
 void demo::testPlannerSimple()
 {
     if (!mSim || !mSim->model())
-    {
         return;
-    }
 
     dxKinMuJoCo kin(mSim->model(), mSim->data());
     dxPlannerSimple planner(&kin);
+
     if (!planner.init())
-    {
         return;
-    }
 
-    const dxMuJoCoRobotState state = mSim->getRobotState();
-    std::vector<double> startDof = state.jointConf;
-    if (startDof.empty())
-    {
-        return;
-    }
-
-    std::vector<double> start = startDof;
-    if (start.empty())
-    {
-        return;
-    }
-
-    planner.setStart(start);
-
-    const double delta = 25.0 * 3.141592653589793 / 180.0;
-    std::vector<double> goal = start;
-    std::vector<int> armIndices = mArmDofIndices;
-    if (armIndices.empty())
-    {
-        const int limit = std::min(6, static_cast<int>(goal.size()));
-        armIndices.reserve(static_cast<size_t>(limit));
-        for (int i = 0; i < limit; ++i)
-        {
-            armIndices.push_back(i);
-        }
-    }
-    for (int idx : armIndices)
-    {
-        if (idx >= 0 && static_cast<size_t>(idx) < goal.size())
-        {
-            goal[static_cast<size_t>(idx)] += delta;
-        }
-    }
-    planner.setGoal(goal);
-
+    //!------ Set Planner Params
     dxPlannerSimple::Params params;
     params.steps = 200;
     params.debugPaths = true;
-    params.checkCollisions = false;
+    params.checkCollisions = true;
     params.collisionDist = -0.001;
+    params.showTrajectoryCurve = true;
     planner.setParams(params);
 
+
+    //!----- set planner start Position
+    std::vector<double> start = mSim->getRobotState().jointConf;
+    planner.setStart(start);
+
+    //!----- set Planner Goal Position
+    double delta = 25.0 * 3.141592653589793 / 180.0;
+    std::vector<double> goal = start;
+    for (int i = 0; i < 6; i++)
+        goal[i] += delta;
+    planner.setGoal(goal);
+
+
+    //!----- Solve for a path
     if (!planner.solve())
     {
+        emit updateUIMessage("Simple Joint Planner Failed!!");
         return;
     }
-
     const std::vector<std::vector<double>>& path = planner.getPath();
-    if (path.empty())
-    {
-        return;
-    }
+    emit updateUIMessage("Simple Planner successful - Path size: " + std::to_string(path.size()));
 
+    //!-----  Build Trajectory
     const std::vector<std::vector<double>> trajectory = planner.buildTrajectory(path);
-    if (trajectory.empty())
-    {
-        return;
-    }
 
     mTrajectory = trajectory;
-    if (mTrajectory.empty())
+    if (params.showTrajectoryCurve)
     {
-        return;
+        emit drawTrajectory(planner.getTrajAs3DPoints(mTrajectory));
     }
 
-    {
-        dxPlannerSimple vizPlanner(mKin.get());
-        if (vizPlanner.init())
-        {
-            emit drawTrajectory(vizPlanner.getTrajAs3DPoints(mTrajectory));
-        }
-    }
-
+    //!----- Simulate Trajectory
     startTrajectoryPlayback();
 }
 

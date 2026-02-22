@@ -51,12 +51,14 @@ signals:
     void gripperPositionRequested(double ratio);
     void trajectoryFinished();
 
+    void updateUIMessage(std::string msg);
+
 private:
     void startTrajectoryPlayback();
-    void buildDofGroups();
-    std::vector<double> extractArmDof(const std::vector<double>& dofQpos) const;
-    std::vector<double> expandArmDof(const std::vector<double>& baseDof,
-                                     const std::vector<double>& armDof) const;
+    //void buildDofGroups();
+    //std::vector<double> extractArmDof(const std::vector<double>& dofQpos) const;
+    //std::vector<double> expandArmDof(const std::vector<double>& baseDof,
+    //                                 const std::vector<double>& armDof) const;
     bool planCartesianTo(const std::vector<double>& startPose,
                          const std::vector<double>& goalPose,
                          std::vector<std::vector<double>>& trajectory,

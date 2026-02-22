@@ -14,6 +14,7 @@ public:
         bool debugPaths = false;
         bool checkCollisions = false;
         double collisionDist = 0.0;
+        bool showTrajectoryCurve = false;
     };
 
     explicit dxPlannerSimple(dxKinMuJoCo* kin = nullptr);

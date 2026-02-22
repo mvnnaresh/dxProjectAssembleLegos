@@ -76,6 +76,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
                     mSim, &dxMuJoCoRobotSimulator::closeGripper, Qt::QueuedConnection);
             connect(mDemo.get(), &demo::gripperPositionRequested,
                     mSim, &dxMuJoCoRobotSimulator::setGripperPosition, Qt::QueuedConnection);
+
+            connect(mDemo.get(), &demo::updateUIMessage,
+                    this, &MainWindow::setStatusMessage);
         }
         if (mViewer)
         {
@@ -131,6 +134,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
         }
     });
 
+
 }
 
 MainWindow::~MainWindow()
@@ -173,4 +177,9 @@ void MainWindow::onStateUpdated()
     {
         mViewer->applyState(mSim->getRobotState());
     }
+}
+
+void MainWindow::setStatusMessage(std::string msg)
+{
+    ui->statusBar->showMessage(QString::fromStdString(msg));
 }

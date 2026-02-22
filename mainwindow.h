@@ -23,6 +23,8 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
+
+
 private slots:
     void onModelLoaded(mjModel* model);
     void onStateUpdated();
@@ -34,6 +36,8 @@ private:
     QThread* mSimThread = nullptr;
     std::unique_ptr<demo> mDemo;
     std::string mModelPath = "models/ur10e_hande_workbench_scene.xml";
+
+    void setStatusMessage(std::string msg);
 };
 
 #endif // MAINWINDOW_H
