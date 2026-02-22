@@ -31,7 +31,6 @@ public:
 
     void testPlannerCartesian();
     void testPickAndPlace();
-    void testPickAndPlace3();
 
     void closeGripper();
     void openGripper();
@@ -54,7 +53,6 @@ signals:
 
 private:
     void startTrajectoryPlayback();
-    void applyGripperClose();
     void buildDofGroups();
     std::vector<double> extractArmDof(const std::vector<double>& dofQpos) const;
     std::vector<double> expandArmDof(const std::vector<double>& baseDof,

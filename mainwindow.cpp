@@ -105,7 +105,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     {
         if (mDemo)
         {
-            mDemo->testPickAndPlace3();
+            mDemo->testPickAndPlace();
         }
     });
 
