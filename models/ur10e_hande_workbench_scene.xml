@@ -103,6 +103,7 @@
     <mesh name="coupler" file="robotiq_hande/assets/coupler.stl" />
     <mesh name="right_finger" file="robotiq_hande/assets/finger_1.stl" />
     <mesh name="left_finger" file="robotiq_hande/assets/finger_2.stl" />
+    <mesh name="lego_brick_1x1" file="lego/assets/brick_1x1.obj" scale="0.001 0.001 0.001"/>
     <material name="gray" rgba="0.4 0.4 0.4 1" />
     <material name="dark_gray" rgba="0.1 0.1 0.1 1" />
     <material name="table_top" rgba="0.75 0.78 0.8 1"/>
@@ -175,6 +176,27 @@
             mass="0.001"
             rgba="0.9 0.2 0.2 1"/>
     </body>
+	
+	<!-- LEGO brick (free object): collision box + visual mesh -->
+    <body name="lego_brick" pos="0.55 0.28 0.06">
+      <freejoint/>
+
+      <!-- Collision + mass (keep similar “feel” to your 1 g cube) -->
+      <geom name="lego_brick_col"
+            type="box"
+            size="0.004 0.004 0.0048"
+            mass="0.001"
+            rgba="0 0 0 0"/>
+
+      <!-- Visual mesh (no collision) -->
+      <geom name="lego_brick_vis"
+            type="mesh"
+            mesh="lego_brick_1x1"
+            rgba="1 0 0.0 1"
+            contype="0"
+            conaffinity="0"/>
+    </body>
+	
     <!-- ============================================================
          ROBOT MOUNT
          This wrapper body positions the UR10e base relative to the world.
