@@ -13,7 +13,7 @@
 namespace
 {
 constexpr double kGripperOpenRatio = 0.0;
-constexpr double kGripperCloseRatio = 0.96;
+constexpr double kGripperCloseRatio = 1.0;
 }
 
 demo::demo(dxMuJoCoRobotSimulator* simulator, QObject* parent)
@@ -332,7 +332,7 @@ void demo::testPickAndPlace()
         return;
     }
 
-    std::vector<double> cubePose = mSim->getBodyPoseByName("grasp_cube");
+    std::vector<double> cubePose = mSim->getBodyPoseByName("lego_brick");
     const double cubeX = cubePose[0];
     const double cubeY = cubePose[1];
     const double cubeZ = cubePose[2];
@@ -371,6 +371,8 @@ void demo::testPickAndPlace()
 
     sendRobotTo(pregraspPose, graspPose, 40);
     std::cout << "[testPickAndPlace3] reached grasp" << std::endl;
+
+    waitSteps(20);
 
     closeGripper();
     waitSteps(25);
