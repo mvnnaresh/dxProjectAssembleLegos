@@ -99,10 +99,10 @@ private:
     HoldMode mHoldMode = HoldMode::HoldJointTargets;
     std::vector<double> mHoldJointTargets;
     std::vector<double> mHoldCtrlTargets;
-    bool mEnablePdHold = true;
+    bool mEnablePdHold = false;
     double mPdKp = 50.0;
     double mPdKd = 5.0;
-    bool mEnableHardLock = true;
+    bool mEnableHardLock = false;
 
     QString mModelPath;
     bool mPoseApplied = false;

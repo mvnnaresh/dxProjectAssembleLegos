@@ -542,6 +542,26 @@ void dxMuJoCoRobotSimulator::stepLoop()
         }
     }
 
+    //!--- patch to fix dropping behaviour
+    // Make sure bias forces are updated
+    mj_forward(mModel, mData);
+
+    // Gravity compensation for hinge/slide joints
+    for (int jid = 0; jid < mModel->njnt; ++jid)
+    {
+        int type = mModel->jnt_type[jid];
+        if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
+            continue;
+
+        int dofadr = mModel->jnt_dofadr[jid];
+
+        if (dofadr >= 0 && dofadr < mModel->nv)
+        {
+            mData->qfrc_applied[dofadr] = mData->qfrc_bias[dofadr];
+        }
+    }
+    //!--- end of patch
+
     mj_step(mModel, mData);
     updateStateSnapshot();
     emit stateUpdated();

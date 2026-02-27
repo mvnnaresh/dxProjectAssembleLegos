@@ -167,6 +167,9 @@ void MainWindow::onModelLoaded(mjModel* model)
     }
     if (mSim)
     {
+        QMetaObject::invokeMethod(mSim, "enableHardLock", Qt::QueuedConnection, Q_ARG(bool, false));
+        QMetaObject::invokeMethod(mSim, "enablePdHold", Qt::QueuedConnection, Q_ARG(bool, false));
+        QMetaObject::invokeMethod(mSim, "start", Qt::QueuedConnection);
         QMetaObject::invokeMethod(mSim, "start", Qt::QueuedConnection);
     }
 }
