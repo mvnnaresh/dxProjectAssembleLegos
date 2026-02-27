@@ -393,6 +393,12 @@ void demo::testPickAndPlace()
     std::cout << "[testPickAndPlace3] returned to preplace" << std::endl;
 }
 
+void demo::testCamera()
+{
+    emit cameraStreamRequested(true);
+    emit updateUIMessage("Camera stream enabled. Ensure a camera exists in the model.");
+}
+
 bool demo::sendRobotTo(const std::vector<double>& fromPose,
                        const std::vector<double>& toPose,
                        int steps)

@@ -4,10 +4,13 @@
 #include <string>
 #include <vector>
 
+#include <QImage>
 #include <QOpenGLWindow>
+#include <QString>
 #include <mujoco/mujoco.h>
 
 #include "dxMuJoCoRobotState.h"
+#include "dxMuJoCoRealSense.h"
 
 class dxMuJoCoRobotViewer : public QOpenGLWindow
 {
@@ -35,6 +38,12 @@ public:
 
 public slots:
     void applyState(const dxMuJoCoRobotState& state);
+    void setCameraStreamEnabled(bool enabled);
+    void setCameraStreamName(const QString& name);
+    void setCameraStreamResolution(int width, int height);
+
+signals:
+    void rgbFrameReady(const QImage& image);
 
 protected:
     void initializeGL() override;
@@ -74,4 +83,11 @@ private:
     std::vector<std::array<double, 3>> mTrajectoryPath;
     std::vector<std::array<double, 12>> mDebugFrames;
     size_t mMaxPathPoints = 4000;
+
+    bool mStreamEnabled = false;
+    int mStreamWidth = 640;
+    int mStreamHeight = 480;
+    QString mStreamCameraName;
+    dxMuJoCoRealSense mStreamCamera;
+    bool mStreamErrorLogged = false;
 };

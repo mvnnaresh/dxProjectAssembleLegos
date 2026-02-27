@@ -146,15 +146,12 @@ std::vector<std::array<double, 3>> dxPlannerSimple::getPathAs3DPoints() const
     return build3DPoints(mPath);
 }
 
-std::vector<std::array<double, 3>> dxPlannerSimple::getTrajAs3DPoints(
-    const std::vector<std::vector<double>>& trajectory) const
+std::vector<std::array<double, 3>> dxPlannerSimple::getTrajAs3DPoints(const std::vector<std::vector<double>>& trajectory) const
 {
     return build3DPoints(trajectory);
 }
 
-std::vector<std::vector<double>> dxPlannerSimple::planJoints(const std::vector<double>& start,
-                              const std::vector<double>& goal,
-                              int steps) const
+std::vector<std::vector<double>> dxPlannerSimple::planJoints(const std::vector<double>& start, const std::vector<double>& goal, int steps) const
 {
     std::vector<std::vector<double>> trajectory;
     if (start.size() != goal.size())
@@ -181,7 +178,7 @@ std::vector<std::vector<double>> dxPlannerSimple::planJoints(const std::vector<d
             point[j] = start[j] + (goal[j] - start[j]) * t;
         }
         if (mParams.checkCollisions &&
-            !mKin->isCollisionFree(point, mParams.collisionDist))
+                !mKin->isCollisionFree(point, mParams.collisionDist))
         {
             std::fprintf(stderr,
                          "[dxPlannerSimple] Joint plan blocked by collision at step %d/%d (minDist=%.6f).\n",
@@ -199,8 +196,7 @@ std::vector<std::vector<double>> dxPlannerSimple::planJoints(const std::vector<d
     return trajectory;
 }
 
-std::vector<std::array<double, 3>> dxPlannerSimple::build3DPoints(
-    const std::vector<std::vector<double>>& qpath) const
+std::vector<std::array<double, 3>> dxPlannerSimple::build3DPoints(const std::vector<std::vector<double>>& qpath) const
 {
     std::vector<std::array<double, 3>> points;
     if (!mKin)
@@ -217,10 +213,11 @@ std::vector<std::array<double, 3>> dxPlannerSimple::build3DPoints(
         }
         const Eigen::Matrix4f& pose = std::get<1>(fkPlanned);
         points.push_back({{
-            static_cast<double>(pose(0, 3)),
-            static_cast<double>(pose(1, 3)),
-            static_cast<double>(pose(2, 3))
-        }});
+                static_cast<double>(pose(0, 3)),
+                static_cast<double>(pose(1, 3)),
+                static_cast<double>(pose(2, 3))
+            }
+        });
     }
     return points;
 }
@@ -285,7 +282,7 @@ bool dxPlannerSimple::planCartesian(const std::vector<double>& startPose,
             return false;
         }
         if (mParams.checkCollisions &&
-            !mKin->isCollisionFree(solution, mParams.collisionDist))
+                !mKin->isCollisionFree(solution, mParams.collisionDist))
         {
             std::fprintf(stderr,
                          "[dxPlannerSimple] Cartesian plan blocked by collision at step %d/%d (minDist=%.6f).\n",

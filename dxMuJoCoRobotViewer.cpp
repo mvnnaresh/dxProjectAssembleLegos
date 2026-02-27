@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include <QDebug>
 #include <QMouseEvent>
 #include <QOpenGLFunctions>
 #include <QWheelEvent>
@@ -44,6 +45,7 @@ bool dxMuJoCoRobotViewer::loadModel(const std::string& modelPath)
     mOwnsModel = true;
     mOwnsData = true;
     mj_forward(mModel, mData);
+    mStreamCamera.setModel(mModel, mData);
 
     mNeedsVisualInit = true;
     update();
@@ -68,6 +70,7 @@ void dxMuJoCoRobotViewer::setModel(mjModel* model)
     mOwnsModel = false;
     mOwnsData = true;
     mj_forward(mModel, mData);
+    mStreamCamera.setModel(mModel, mData);
 
     mNeedsVisualInit = true;
     update();
@@ -168,6 +171,27 @@ void dxMuJoCoRobotViewer::applyState(const dxMuJoCoRobotState& state)
     update();
 }
 
+void dxMuJoCoRobotViewer::setCameraStreamEnabled(bool enabled)
+{
+    mStreamEnabled = enabled;
+}
+
+void dxMuJoCoRobotViewer::setCameraStreamName(const QString& name)
+{
+    mStreamCameraName = name;
+    mStreamCamera.setCameraName(name.toStdString());
+}
+
+void dxMuJoCoRobotViewer::setCameraStreamResolution(int width, int height)
+{
+    if (width > 0 && height > 0)
+    {
+        mStreamWidth = width;
+        mStreamHeight = height;
+        mStreamCamera.setResolution(width, height);
+    }
+}
+
 void dxMuJoCoRobotViewer::initializeGL()
 {
     if (mModel)
@@ -206,6 +230,23 @@ void dxMuJoCoRobotViewer::paintGL()
     appendPathGeoms(mTrajectoryPath, pathColor);
     appendFrameGeoms(mDebugFrames);
     mjr_render(viewport, &mScn, &mCon);
+
+    if (mStreamEnabled)
+    {
+        dxMuJoCoRealSense::Frame frame;
+        mStreamCamera.setResolution(mStreamWidth, mStreamHeight);
+        if (mStreamCamera.captureRgbDepth(&mOpt, &mCon, frame))
+        {
+            mStreamErrorLogged = false;
+            QImage image(frame.rgb.data(), frame.width, frame.height, QImage::Format_RGB888);
+            emit rgbFrameReady(image.copy());
+        }
+        else if (!mStreamErrorLogged)
+        {
+            mStreamErrorLogged = true;
+            qWarning() << "Camera capture failed:" << QString::fromStdString(mStreamCamera.lastError());
+        }
+    }
 }
 
 void dxMuJoCoRobotViewer::resizeGL(int w, int h)
@@ -464,4 +505,5 @@ void dxMuJoCoRobotViewer::shutdownModel()
     mModel = nullptr;
     mOwnsData = false;
     mOwnsModel = false;
+    mStreamCamera.setModel(nullptr, nullptr);
 }

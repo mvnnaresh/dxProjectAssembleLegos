@@ -101,7 +101,9 @@ add_executable(dxProjectAssembleLegos main.cpp
 	mainwindow.cpp
 	mainwindow.ui
     dxMuJoCoRobotViewer.h
-    dxMuJoCoRobotViewer.cpp)
+    dxMuJoCoRobotViewer.cpp
+    dxMuJoCoRealSense.h
+    dxMuJoCoRealSense.cpp)
 
 target_include_directories(dxProjectAssembleLegos PRIVATE
   ${Boost_INCLUDE_DIRS}
@@ -119,5 +121,6 @@ target_link_libraries(dxProjectAssembleLegos PRIVATE
   ${QT_LIBRARIES}
     ${OpenCV_LIBS}
 )
+
 
 
