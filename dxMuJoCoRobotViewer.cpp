@@ -103,6 +103,12 @@ void dxMuJoCoRobotViewer::drawFrames(const std::vector<std::array<double, 12>>& 
     update();
 }
 
+void dxMuJoCoRobotViewer::runWithContext(const std::function<void()>& fn)
+{
+    mPendingContextFn = fn;
+    update();
+}
+
 void dxMuJoCoRobotViewer::applyState(const dxMuJoCoRobotState& state)
 {
     if (!mModel || !mData)
@@ -203,6 +209,7 @@ void dxMuJoCoRobotViewer::requestPointCloudCapture()
     mPointCloudCapturePending = true;
 }
 
+
 void dxMuJoCoRobotViewer::initializeGL()
 {
     if (mModel)
@@ -290,6 +297,13 @@ void dxMuJoCoRobotViewer::paintGL()
             qWarning() << "Point cloud capture failed:"
                        << QString::fromStdString(mStreamCamera.lastError());
         }
+    }
+
+    if (mPendingContextFn)
+    {
+        auto fn = std::move(mPendingContextFn);
+        mPendingContextFn = nullptr;
+        fn();
     }
 }
 

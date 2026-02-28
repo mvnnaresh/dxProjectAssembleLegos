@@ -7,6 +7,7 @@
 #include <QPushButton>
 #include <QDebug>
 #include <memory>
+#include <unordered_map>
 
 #include "dxMuJoCoRobotSimulator.h"
 #include "dxMuJoCoRobotViewer.h"
@@ -44,7 +45,7 @@ private:
     QLabel* mCameraLabel = nullptr;
     QPushButton* mCameraButton = nullptr;
     bool mCameraStreaming = false;
-    std::unique_ptr<dxVision> mVision;
+    std::unordered_map<std::string, std::unique_ptr<dxVision>> mVisionByCamera;
     std::string mModelPath = "models/ur10e_hande_workbench_scene.xml";
 
     void setStatusMessage(const std::string& msg) const;

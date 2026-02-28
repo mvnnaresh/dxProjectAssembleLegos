@@ -17,6 +17,96 @@ dxVision::dxVision() = default;
 
 dxVision::~dxVision() = default;
 
+bool dxVision::initMujocoCamera(const MuJoCoCameraParams& mujoparams)
+{
+    mModel = mujoparams.model;
+    mData = mujoparams.data;
+    mOpt = mujoparams.opt;
+    mCtx = mujoparams.ctx;
+    mCameraName = mujoparams.cameraName;
+    mBaseBodyName = mujoparams.baseBodyName;
+    if (mujoparams.width > 0)
+    {
+        mWidth = mujoparams.width;
+    }
+    if (mujoparams.height > 0)
+    {
+        mHeight = mujoparams.height;
+    }
+
+    if (!mModel || !mData || !mOpt || !mCtx)
+    {
+        return false;
+    }
+
+    mMujocoCamera.setModel(mModel, mData);
+    mMujocoCamera.setCameraName(mCameraName);
+    mMujocoCamera.setBaseBodyName(mBaseBodyName);
+    mMujocoCamera.setResolution(mWidth, mHeight);
+    return true;
+}
+
+cv::Mat dxVision::acquireMujocoRgb()
+{
+    if (!mModel || !mData || !mOpt || !mCtx)
+    {
+        return cv::Mat();
+    }
+    dxMuJoCoRealSense::Frame frame;
+    mMujocoCamera.setResolution(mWidth, mHeight);
+    if (!mMujocoCamera.captureRgbDepth(mOpt, mCtx, frame))
+    {
+        return cv::Mat();
+    }
+
+    cv::Mat image(frame.height, frame.width, CV_8UC3, frame.rgb.data());
+    return image.clone();
+}
+
+CloudPtr dxVision::acquireMujocoPointCloud()
+{
+    if (!mModel || !mData || !mOpt || !mCtx)
+    {
+        return CloudPtr();
+    }
+
+    dxMuJoCoRealSense::Frame frame;
+    mMujocoCamera.setResolution(mWidth, mHeight);
+    if (!mMujocoCamera.captureRgbDepth(mOpt, mCtx, frame))
+    {
+        return CloudPtr();
+    }
+
+    std::vector<std::array<float, 3>> points;
+    std::vector<std::array<unsigned char, 3>> colors;
+    if (!mMujocoCamera.computePointCloudInBaseWithColor(frame.depth, frame.rgb, points, colors))
+    {
+        return CloudPtr();
+    }
+
+    CloudPtr cloud(new Cloud());
+    cloud->points.resize(points.size());
+    cloud->width = static_cast<uint32_t>(points.size());
+    cloud->height = 1;
+    cloud->is_dense = false;
+    for (size_t i = 0; i < points.size(); ++i)
+    {
+        const auto& p = points[i];
+        const auto& c = colors[i];
+        PointRGBA pt;
+        pt.x = p[0];
+        pt.y = p[1];
+        pt.z = p[2];
+        pt.r = c[0];
+        pt.g = c[1];
+        pt.b = c[2];
+        pt.a = 255;
+        cloud->points[i] = pt;
+    }
+    return cloud;
+}
+
+
 
 void dxVision::viewPointCloud(CloudPtr source, string viewid, string msg, int pointSize)
 {

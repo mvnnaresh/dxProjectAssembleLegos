@@ -22,6 +22,9 @@
 #include <pcl/features/fpfh_omp.h>
 #include <pcl/visualization/pcl_visualizer.h>
 
+#include <opencv2/core.hpp>
+
+#include "dxMuJoCoRealSense.h"
 
 #include <pcl/io/vtk_io.h>
 #include <vtkActor.h>
@@ -94,6 +97,18 @@ struct cropvalues
     }
 };
 
+struct MuJoCoCameraParams
+{
+    mjModel* model = nullptr;
+    mjData* data = nullptr;
+    mjvOption* opt = nullptr;
+    mjrContext* ctx = nullptr;
+    std::string cameraName;
+    std::string baseBodyName;
+    int width = 640;
+    int height = 480;
+};
+
 class dxVision
 {
 public:
@@ -113,6 +128,10 @@ public:
     void addCoordinateSystem(pcl::visualization::PCLVisualizer& view, double x = 0, double y = 0, double z = 0);
     CloudPtr cropPointCloud(CloudPtr source, const cropvalues& limits);
 
+    bool initMujocoCamera(const MuJoCoCameraParams& mujoparams);
+    cv::Mat acquireMujocoRgb();
+    CloudPtr acquireMujocoPointCloud();
+
     //View Point cloud with normal
     template <typename PointType, class CloudType>
     void viewPointCloudWithNormalsAndTexture(typename CloudType::Ptr cloud, int point_size);
@@ -125,6 +144,16 @@ private:
 
     Eigen::MatrixXi camera_source_; ///< binary matrix: (i,j) = 1 if point j is seen by camera i
     Eigen::Matrix3Xd normals_; ///< the surface normal for each point in the point cloud
+
+    mjModel* mModel = nullptr;
+    mjData* mData = nullptr;
+    mjvOption* mOpt = nullptr;
+    mjrContext* mCtx = nullptr;
+    std::string mCameraName;
+    std::string mBaseBodyName;
+    int mWidth = 640;
+    int mHeight = 480;
+    dxMuJoCoRealSense mMujocoCamera;
 
 };
 

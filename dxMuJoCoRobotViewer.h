@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -26,6 +27,7 @@ public:
 
     void drawTrajectory(const std::vector<std::array<double, 3>>& points);
     void drawFrames(const std::vector<std::array<double, 12>>& frames);
+    void runWithContext(const std::function<void()>& fn);
 
     mjModel* model() const
     {
@@ -34,6 +36,14 @@ public:
     mjData* data() const
     {
         return mData;
+    }
+    mjvOption* mjvOptionPtr()
+    {
+        return mVisualsReady ? &mOpt : nullptr;
+    }
+    mjrContext* mjrContextPtr()
+    {
+        return mVisualsReady ? &mCon : nullptr;
     }
 
 public slots:
@@ -97,4 +107,5 @@ private:
     bool mStreamErrorLogged = false;
     bool mPointCloudCapturePending = false;
     bool mPointCloudErrorLogged = false;
+    std::function<void()> mPendingContextFn;
 };

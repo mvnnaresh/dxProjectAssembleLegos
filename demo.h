@@ -5,11 +5,15 @@
 #include <vector>
 #include <utility>
 
+#include <functional>
+
 #include <QObject>
 #include <QTimer>
 
 #include "dxKinMuJoCo.h"
 #include "dxMuJoCoRobotSimulator.h"
+#include "dxMuJoCoRobotViewer.h"
+#include "dxVision.h"
 
 class demo : public QObject
 {
@@ -33,6 +37,7 @@ public:
     void testPickAndPlace();
     void testCamera();
     void testCamera3D();
+    void setViewer(dxMuJoCoRobotViewer* viewer);
 
     void closeGripper();
     void openGripper();
@@ -75,6 +80,7 @@ private:
     void setGripperHoldRatio(double ratio);
 
     dxMuJoCoRobotSimulator* mSim = nullptr;
+    dxMuJoCoRobotViewer* mViewer = nullptr;
 
     std::vector<std::vector<double>> mTrajectory;
     std::vector<std::pair<size_t, double>> mGripperEvents;

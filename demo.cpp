@@ -396,13 +396,48 @@ void demo::testPickAndPlace()
 void demo::testCamera()
 {
     emit cameraStreamRequested(true);
-    emit updateUIMessage("Camera stream enabled. Ensure a camera exists in the model.");
+    emit cameraPointCloudRequested();
+    emit updateUIMessage("Camera RGB + point cloud requested.");
 }
 
 void demo::testCamera3D()
 {
-    emit cameraPointCloudRequested();
-    emit updateUIMessage("Requested camera point cloud.");
+    if (!mViewer)
+    {
+        emit updateUIMessage("No viewer available for camera capture.");
+        return;
+    }
+
+    mViewer->runWithContext([this]()
+    {
+        dxVision camA;
+        MuJoCoCameraParams mujoparams;
+        mujoparams.model = mViewer->model();
+        mujoparams.data = mViewer->data();
+        mujoparams.opt = mViewer->mjvOptionPtr();
+        mujoparams.ctx = mViewer->mjrContextPtr();
+        mujoparams.cameraName = "scene_cam";
+        mujoparams.baseBodyName = "base";
+        mujoparams.width = 640;
+        mujoparams.height = 480;
+
+        if (!camA.initMujocoCamera(mujoparams))
+        {
+            return;
+        }
+        CloudPtr cloud = camA.acquireMujocoPointCloud();
+        if (cloud && !cloud->points.empty())
+        {
+            camA.viewPointCloud(cloud, "camera_cloud", "Camera Point Cloud", 2);
+        }
+    });
+
+    emit updateUIMessage("Camera point cloud requested.");
+}
+
+void demo::setViewer(dxMuJoCoRobotViewer* viewer)
+{
+    mViewer = viewer;
 }
 
 bool demo::sendRobotTo(const std::vector<double>& fromPose,
