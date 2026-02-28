@@ -175,9 +175,10 @@ bool dxMuJoCoRealSense::computePointCloudInBase(const std::vector<float>& depthM
             const float x = static_cast<float>((u - intr.cx) * z / intr.fx);
             const float y = static_cast<float>((v - intr.cy) * z / intr.fy);
 
-            const float pCam[3] = { x, y, z };
+            // MuJoCo camera looks along -Z; image Y is down, so flip Y and Z.
+            const float pCam[3] = { x, -y, -z };
             float pWorld[3];
-            rotateColumnMajor(camMat, pCam, pWorld);
+            rotateRowMajor(camMat, pCam, pWorld);
             pWorld[0] += static_cast<float>(camPos[0]);
             pWorld[1] += static_cast<float>(camPos[1]);
             pWorld[2] += static_cast<float>(camPos[2]);
@@ -190,7 +191,7 @@ bool dxMuJoCoRealSense::computePointCloudInBase(const std::vector<float>& depthM
             };
 
             float pBase[3];
-            rotateColumnMajorT(baseMat, delta, pBase);
+            rotateRowMajorT(baseMat, delta, pBase);
 
             pointsBase.push_back({ pBase[0], pBase[1], pBase[2] });
         }
@@ -230,11 +231,97 @@ bool dxMuJoCoRealSense::computePointCloudInCamera(const std::vector<float>& dept
 
             const float x = static_cast<float>((u - intr.cx) * z / intr.fx);
             const float y = static_cast<float>((v - intr.cy) * z / intr.fy);
-            pointsCam.push_back({ x, y, z });
+            pointsCam.push_back({ x, -y, -z });
         }
     }
 
     return !pointsCam.empty();
+}
+
+bool dxMuJoCoRealSense::computePointCloudInBaseWithColor(const std::vector<float>& depthMeters,
+                                                         const std::vector<unsigned char>& rgb,
+                                                         std::vector<std::array<float, 3>>& pointsBase,
+                                                         std::vector<std::array<unsigned char, 3>>& colors)
+{
+    pointsBase.clear();
+    colors.clear();
+    mLastError.clear();
+    if (!mModel || !mData)
+    {
+        mLastError = "computePointCloudInBaseWithColor: missing model/data.";
+        return false;
+    }
+    if (depthMeters.size() != static_cast<size_t>(mWidth * mHeight))
+    {
+        mLastError = "computePointCloudInBaseWithColor: depth size mismatch.";
+        return false;
+    }
+    if (rgb.size() != static_cast<size_t>(mWidth * mHeight * 3))
+    {
+        mLastError = "computePointCloudInBaseWithColor: rgb size mismatch.";
+        return false;
+    }
+    if (!resolveCameraId() || !resolveBaseBodyId())
+    {
+        mLastError = "computePointCloudInBaseWithColor: camera/base not found.";
+        return false;
+    }
+
+    Intrinsics intr;
+    if (!computeIntrinsics(intr))
+    {
+        mLastError = "computePointCloudInBaseWithColor: failed to compute intrinsics.";
+        return false;
+    }
+
+    const double* camPos = mData->cam_xpos + 3 * mCameraId;
+    const double* camMat = mData->cam_xmat + 9 * mCameraId;
+
+    const double* basePos = mData->xpos + 3 * mBaseBodyId;
+    const double* baseMat = mData->xmat + 9 * mBaseBodyId;
+
+    pointsBase.reserve(depthMeters.size());
+    colors.reserve(depthMeters.size());
+
+    for (int v = 0; v < mHeight; ++v)
+    {
+        for (int u = 0; u < mWidth; ++u)
+        {
+            const size_t idx = static_cast<size_t>(v * mWidth + u);
+            const float z = depthMeters[idx];
+            if (!std::isfinite(z) || z <= 0.0f)
+            {
+                continue;
+            }
+
+            const float x = static_cast<float>((u - intr.cx) * z / intr.fx);
+            const float y = static_cast<float>((v - intr.cy) * z / intr.fy);
+
+            // MuJoCo camera looks along -Z; image Y is down, so flip Y and Z.
+            const float pCam[3] = { x, -y, -z };
+            float pWorld[3];
+            rotateRowMajor(camMat, pCam, pWorld);
+            pWorld[0] += static_cast<float>(camPos[0]);
+            pWorld[1] += static_cast<float>(camPos[1]);
+            pWorld[2] += static_cast<float>(camPos[2]);
+
+            float delta[3] =
+            {
+                static_cast<float>(pWorld[0] - basePos[0]),
+                static_cast<float>(pWorld[1] - basePos[1]),
+                static_cast<float>(pWorld[2] - basePos[2])
+            };
+
+            float pBase[3];
+            rotateRowMajorT(baseMat, delta, pBase);
+
+            const size_t rgbIndex = idx * 3;
+            colors.push_back({ rgb[rgbIndex], rgb[rgbIndex + 1], rgb[rgbIndex + 2] });
+            pointsBase.push_back({ pBase[0], pBase[1], pBase[2] });
+        }
+    }
+
+    return !pointsBase.empty();
 }
 
 bool dxMuJoCoRealSense::getCameraPoseWorld(double pos[3], double mat[9]) const
@@ -475,16 +562,16 @@ void dxMuJoCoRealSense::depthBufferToMeters(std::vector<float>& depth, float zne
     }
 }
 
-void dxMuJoCoRealSense::rotateColumnMajor(const double* mat, const float in[3], float out[3])
-{
-    out[0] = static_cast<float>(mat[0] * in[0] + mat[3] * in[1] + mat[6] * in[2]);
-    out[1] = static_cast<float>(mat[1] * in[0] + mat[4] * in[1] + mat[7] * in[2]);
-    out[2] = static_cast<float>(mat[2] * in[0] + mat[5] * in[1] + mat[8] * in[2]);
-}
-
-void dxMuJoCoRealSense::rotateColumnMajorT(const double* mat, const float in[3], float out[3])
+void dxMuJoCoRealSense::rotateRowMajor(const double* mat, const float in[3], float out[3])
 {
     out[0] = static_cast<float>(mat[0] * in[0] + mat[1] * in[1] + mat[2] * in[2]);
     out[1] = static_cast<float>(mat[3] * in[0] + mat[4] * in[1] + mat[5] * in[2]);
     out[2] = static_cast<float>(mat[6] * in[0] + mat[7] * in[1] + mat[8] * in[2]);
+}
+
+void dxMuJoCoRealSense::rotateRowMajorT(const double* mat, const float in[3], float out[3])
+{
+    out[0] = static_cast<float>(mat[0] * in[0] + mat[3] * in[1] + mat[6] * in[2]);
+    out[1] = static_cast<float>(mat[1] * in[0] + mat[4] * in[1] + mat[7] * in[2]);
+    out[2] = static_cast<float>(mat[2] * in[0] + mat[5] * in[1] + mat[8] * in[2]);
 }

@@ -399,6 +399,12 @@ void demo::testCamera()
     emit updateUIMessage("Camera stream enabled. Ensure a camera exists in the model.");
 }
 
+void demo::testCamera3D()
+{
+    emit cameraPointCloudRequested();
+    emit updateUIMessage("Requested camera point cloud.");
+}
+
 bool demo::sendRobotTo(const std::vector<double>& fromPose,
                        const std::vector<double>& toPose,
                        int steps)

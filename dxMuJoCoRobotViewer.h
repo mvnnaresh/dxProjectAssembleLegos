@@ -41,9 +41,13 @@ public slots:
     void setCameraStreamEnabled(bool enabled);
     void setCameraStreamName(const QString& name);
     void setCameraStreamResolution(int width, int height);
+    void setCameraStreamBaseBodyName(const QString& name);
+    void requestPointCloudCapture();
 
 signals:
     void rgbFrameReady(const QImage& image);
+    void pointCloudReady(const std::vector<std::array<float, 3>>& points,
+                         const std::vector<std::array<unsigned char, 3>>& colors);
 
 protected:
     void initializeGL() override;
@@ -88,6 +92,9 @@ private:
     int mStreamWidth = 640;
     int mStreamHeight = 480;
     QString mStreamCameraName;
+    QString mStreamBaseBodyName;
     dxMuJoCoRealSense mStreamCamera;
     bool mStreamErrorLogged = false;
+    bool mPointCloudCapturePending = false;
+    bool mPointCloudErrorLogged = false;
 };

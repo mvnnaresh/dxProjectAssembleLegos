@@ -36,6 +36,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     QPushButton* cartButton = new QPushButton("Test Cartesian", dockWidget);
     QPushButton* pickPlaceButton = new QPushButton("Test Pick/Place", dockWidget);
     mCameraButton = new QPushButton("Test Camera", dockWidget);
+    QPushButton* camera3dButton = new QPushButton("Test Camera 3D", dockWidget);
     QPushButton* closeButton = new QPushButton("Close Gripper", dockWidget);
     QPushButton* openButton = new QPushButton("Open Gripper", dockWidget);
     QSlider* gripperSlider = new QSlider(Qt::Horizontal, dockWidget);
@@ -47,6 +48,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     dockLayout->addWidget(cartButton);
     dockLayout->addWidget(pickPlaceButton);
     dockLayout->addWidget(mCameraButton);
+    dockLayout->addWidget(camera3dButton);
     dockLayout->addWidget(closeButton);
     dockLayout->addWidget(openButton);
     dockLayout->addWidget(gripperSlider);
@@ -73,6 +75,75 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
         mCameraLabel->setPixmap(pix.scaled(mCameraLabel->size(),
                                            Qt::KeepAspectRatio,
                                            Qt::SmoothTransformation));
+    });
+    connect(mViewer, &dxMuJoCoRobotViewer::pointCloudReady,
+            this,
+            [this](const std::vector<std::array<float, 3>>& points,
+                   const std::vector<std::array<unsigned char, 3>>& colors)
+    {
+        if (!mVision)
+        {
+            mVision = std::make_unique<dxVision>();
+        }
+        if (points.empty() || colors.empty() || points.size() != colors.size())
+        {
+            return;
+        }
+        float minX = points[0][0];
+        float maxX = points[0][0];
+        float minY = points[0][1];
+        float maxY = points[0][1];
+        float minZ = points[0][2];
+        float maxZ = points[0][2];
+        for (const auto& p : points)
+        {
+            minX = std::min(minX, p[0]);
+            maxX = std::max(maxX, p[0]);
+            minY = std::min(minY, p[1]);
+            maxY = std::max(maxY, p[1]);
+            minZ = std::min(minZ, p[2]);
+            maxZ = std::max(maxZ, p[2]);
+        }
+        qDebug() << "Point cloud bounds (base frame):"
+                 << "x[" << minX << "," << maxX << "]"
+                 << "y[" << minY << "," << maxY << "]"
+                 << "z[" << minZ << "," << maxZ << "]";
+        CloudPtr cloud(new Cloud());
+        cloud->points.resize(points.size());
+        cloud->width = static_cast<uint32_t>(points.size());
+        cloud->height = 1;
+        cloud->is_dense = false;
+        for (size_t i = 0; i < points.size(); ++i)
+        {
+            const auto& p = points[i];
+            const auto& c = colors[i];
+            PointRGBA pt;
+            pt.x = p[0];
+            pt.y = p[1];
+            pt.z = p[2];
+            pt.r = c[0];
+            pt.g = c[1];
+            pt.b = c[2];
+            pt.a = 255;
+            cloud->points[i] = pt;
+        }
+        cropvalues limits;
+        limits.xmin = 0.0;
+        limits.xmax = 1.0;
+        limits.ymin = -1.0;
+        limits.ymax = 1.0;
+        limits.zmin = 0.0;
+        limits.zmax = 0.8;
+
+        CloudPtr cropped = mVision->cropPointCloud(cloud, limits);
+        if (cropped && !cropped->points.empty())
+        {
+            mVision->viewPointCloud(cropped, "camera_cloud", "Camera Point Cloud (Cropped)", 2);
+        }
+        else
+        {
+            mVision->viewPointCloud(cloud, "camera_cloud_raw", "Camera Point Cloud (Raw)", 2);
+        }
     });
     mSim = new dxMuJoCoRobotSimulator();
     mSim->setControlRateHz(250.0);
@@ -140,6 +211,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
                     this, &MainWindow::setStatusMessage);
             connect(mDemo.get(), &demo::cameraStreamRequested,
                     mViewer, &dxMuJoCoRobotViewer::setCameraStreamEnabled);
+            connect(mDemo.get(), &demo::cameraPointCloudRequested,
+                    mViewer, &dxMuJoCoRobotViewer::requestPointCloudCapture);
         }
         if (mViewer)
         {
@@ -189,6 +262,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
             }
         }
         updateCameraButtonState();
+    });
+
+    connect(camera3dButton, &QPushButton::clicked, this, [this]()
+    {
+        if (mDemo)
+        {
+            mDemo->testCamera3D();
+        }
     });
 
     connect(closeButton, &QPushButton::clicked, this, [this]()
@@ -247,6 +328,7 @@ void MainWindow::onModelLoaded(mjModel* model) const
         mViewer->setModel(model);
         mViewer->setCameraStreamName("scene_cam");
         mViewer->setCameraStreamResolution(640, 480);
+        mViewer->setCameraStreamBaseBodyName("base");
         this->onStateUpdated();
     }
     if (mDemo && !mDemo->init())

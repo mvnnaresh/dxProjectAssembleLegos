@@ -32,6 +32,7 @@ public:
     void testPlannerCartesian();
     void testPickAndPlace();
     void testCamera();
+    void testCamera3D();
 
     void closeGripper();
     void openGripper();
@@ -54,6 +55,7 @@ signals:
 
     void updateUIMessage(std::string msg);
     void cameraStreamRequested(bool enabled);
+    void cameraPointCloudRequested();
 
 private:
     void startTrajectoryPlayback();

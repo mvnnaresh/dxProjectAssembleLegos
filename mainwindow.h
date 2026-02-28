@@ -5,12 +5,13 @@
 #include <QThread>
 #include <QLabel>
 #include <QPushButton>
-
+#include <QDebug>
 #include <memory>
 
 #include "dxMuJoCoRobotSimulator.h"
 #include "dxMuJoCoRobotViewer.h"
 #include "demo.h"
+#include "dxVision.h"
 
 namespace Ui
 {
@@ -43,6 +44,7 @@ private:
     QLabel* mCameraLabel = nullptr;
     QPushButton* mCameraButton = nullptr;
     bool mCameraStreaming = false;
+    std::unique_ptr<dxVision> mVision;
     std::string mModelPath = "models/ur10e_hande_workbench_scene.xml";
 
     void setStatusMessage(const std::string& msg) const;

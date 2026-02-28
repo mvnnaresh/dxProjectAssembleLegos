@@ -13,6 +13,10 @@ constexpr double fR = 0.9f, fG = 0.0f, fB = 0.0f;
 constexpr double framesize = 0.5;
 }
 
+dxVision::dxVision() = default;
+
+dxVision::~dxVision() = default;
+
 
 void dxVision::viewPointCloud(CloudPtr source, string viewid, string msg, int pointSize)
 {
@@ -256,6 +260,25 @@ void dxVision::viewPointCloudWithNormalsAndTexture(CloudNTRGBAPtr source, std::s
         Nviewer->spin();
     }
     Nviewer->close();
+}
+
+CloudPtr dxVision::cropPointCloud(CloudPtr source, const cropvalues& limits)
+{
+    if (!source)
+    {
+        return CloudPtr();
+    }
+    CloudPtr cropped(new Cloud());
+    pcl::CropBox<PointRGBA> crop;
+    crop.setInputCloud(source);
+    crop.setMin(Eigen::Vector4f(static_cast<float>(limits.xmin),
+                                static_cast<float>(limits.ymin),
+                                static_cast<float>(limits.zmin), 1.0f));
+    crop.setMax(Eigen::Vector4f(static_cast<float>(limits.xmax),
+                                static_cast<float>(limits.ymax),
+                                static_cast<float>(limits.zmax), 1.0f));
+    crop.filter(*cropped);
+    return cropped;
 }
 
 template <typename PointType, class CloudType>

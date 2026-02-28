@@ -43,6 +43,10 @@ public:
 
     bool computePointCloudInBase(const std::vector<float>& depthMeters,
                                  std::vector<std::array<float, 3>>& pointsBase);
+    bool computePointCloudInBaseWithColor(const std::vector<float>& depthMeters,
+                                          const std::vector<unsigned char>& rgb,
+                                          std::vector<std::array<float, 3>>& pointsBase,
+                                          std::vector<std::array<unsigned char, 3>>& colors);
     bool computePointCloudInCamera(const std::vector<float>& depthMeters,
                                    std::vector<std::array<float, 3>>& pointsCam);
 
@@ -61,8 +65,8 @@ private:
     static void flipVerticalRGB(std::vector<unsigned char>& rgb, int width, int height);
     static void flipVerticalDepth(std::vector<float>& depth, int width, int height);
     static void depthBufferToMeters(std::vector<float>& depth, float znear, float zfar);
-    static void rotateColumnMajor(const double* mat, const float in[3], float out[3]);
-    static void rotateColumnMajorT(const double* mat, const float in[3], float out[3]);
+    static void rotateRowMajor(const double* mat, const float in[3], float out[3]);
+    static void rotateRowMajorT(const double* mat, const float in[3], float out[3]);
 
     mjModel* mModel = nullptr;
     mjData* mData = nullptr;

@@ -16,6 +16,7 @@
 #include <pcl/search/kdtree.h>
 #include <pcl/common/common.h>
 #include <pcl/filters/filter.h>
+#include <pcl/filters/crop_box.h>
 #include <pcl/common/centroid.h>
 #include <pcl/ModelCoefficients.h>
 #include <pcl/features/fpfh_omp.h>
@@ -110,6 +111,7 @@ public:
     void viewPointCloudWithNormals(CloudNTPtr source, std::string viewid = "default", bool viewNormals = false);
     void viewPointCloudWithNormalsAndTexture(CloudNTRGBAPtr source, std::string viewid = "", bool viewNormals = false);
     void addCoordinateSystem(pcl::visualization::PCLVisualizer& view, double x = 0, double y = 0, double z = 0);
+    CloudPtr cropPointCloud(CloudPtr source, const cropvalues& limits);
 
     //View Point cloud with normal
     template <typename PointType, class CloudType>

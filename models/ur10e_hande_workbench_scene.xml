@@ -116,7 +116,7 @@
   <worldbody>
     <light pos="0.45 0 1.1" dir="0 0 -1" directional="true" diffuse="1 1 1" ambient="0.2 0.2 0.2"/>
     <light pos="0 -0.2 1" dir="0 0.2 -0.8" directional="true" diffuse="0.4 0.4 0.4" ambient="0.05 0.05 0.05"/>
-    <camera name="scene_cam" pos="1.2 -0.8 1.2" xyaxes="0.777 0.631 0 -0.318 0.391 0.865" fovy="60"/>
+    <camera name="scene_cam" pos="1.35 -1.0 1.1" xyaxes="0.707 0.707 0 -0.5 0.5 0.707" fovy="60"/>
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" pos="0 0 -0.89"/>
     <site size="0.002" pos="0 0 0.2" name="anchor"/>
 

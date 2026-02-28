@@ -192,6 +192,17 @@ void dxMuJoCoRobotViewer::setCameraStreamResolution(int width, int height)
     }
 }
 
+void dxMuJoCoRobotViewer::setCameraStreamBaseBodyName(const QString& name)
+{
+    mStreamBaseBodyName = name;
+    mStreamCamera.setBaseBodyName(name.toStdString());
+}
+
+void dxMuJoCoRobotViewer::requestPointCloudCapture()
+{
+    mPointCloudCapturePending = true;
+}
+
 void dxMuJoCoRobotViewer::initializeGL()
 {
     if (mModel)
@@ -245,6 +256,39 @@ void dxMuJoCoRobotViewer::paintGL()
         {
             mStreamErrorLogged = true;
             qWarning() << "Camera capture failed:" << QString::fromStdString(mStreamCamera.lastError());
+        }
+    }
+
+    if (mPointCloudCapturePending)
+    {
+        mPointCloudCapturePending = false;
+        dxMuJoCoRealSense::Frame frame;
+        mStreamCamera.setResolution(mStreamWidth, mStreamHeight);
+        if (!mStreamBaseBodyName.isEmpty())
+        {
+            mStreamCamera.setBaseBodyName(mStreamBaseBodyName.toStdString());
+        }
+        if (mStreamCamera.captureRgbDepth(&mOpt, &mCon, frame))
+        {
+            std::vector<std::array<float, 3>> points;
+            std::vector<std::array<unsigned char, 3>> colors;
+            if (mStreamCamera.computePointCloudInBaseWithColor(frame.depth, frame.rgb, points, colors))
+            {
+                mPointCloudErrorLogged = false;
+                emit pointCloudReady(points, colors);
+            }
+            else if (!mPointCloudErrorLogged)
+            {
+                mPointCloudErrorLogged = true;
+                qWarning() << "Point cloud build failed:"
+                           << QString::fromStdString(mStreamCamera.lastError());
+            }
+        }
+        else if (!mPointCloudErrorLogged)
+        {
+            mPointCloudErrorLogged = true;
+            qWarning() << "Point cloud capture failed:"
+                       << QString::fromStdString(mStreamCamera.lastError());
         }
     }
 }
@@ -373,7 +417,7 @@ void dxMuJoCoRobotViewer::initVisuals()
     mjv_defaultScene(&mScn);
     mjr_defaultContext(&mCon);
 
-    mOpt.frame = mjFRAME_WORLD;
+    mOpt.frame = mjFRAME_NONE;
 
     mjv_makeScene(mModel, &mScn, 4000);
     mjr_makeContext(mModel, &mCon, mjFONTSCALE_150);
