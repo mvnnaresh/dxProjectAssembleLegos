@@ -85,7 +85,8 @@ if(OpenCV_FOUND)
 		message(WARNING "[DexMan WARNING] >> OpenCV Not found - so VISP support wont be added to DexMan!!")
 endif()
 
-
+FIND_PACKAGE(PCL 1.8 REQUIRED)
+ADD_DEFINITIONS(${PCL_DEFINITIONS} -D_WINSOCK_DEPRECATED_NO_WARNINGS -D_CRT_SECURE_NO_WARNINGS -DBOOST_CONFIG_SUPPRESS_OUTDATED_MESSAGE)
 
 add_executable(dxProjectAssembleLegos main.cpp
     demo.cpp
@@ -103,13 +104,16 @@ add_executable(dxProjectAssembleLegos main.cpp
     dxMuJoCoRobotViewer.h
     dxMuJoCoRobotViewer.cpp
     dxMuJoCoRealSense.h
-    dxMuJoCoRealSense.cpp)
+    dxMuJoCoRealSense.cpp
+	dxVision.h
+	dxVision.cpp)
 
 target_include_directories(dxProjectAssembleLegos PRIVATE
   ${Boost_INCLUDE_DIRS}
   ${VISP_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIR}
   ${OpenCV_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
 )
 
 target_link_libraries(dxProjectAssembleLegos PRIVATE
@@ -120,6 +124,7 @@ target_link_libraries(dxProjectAssembleLegos PRIVATE
   ${VISP_LIBRARIES}
   ${QT_LIBRARIES}
     ${OpenCV_LIBS}
+	${PCL_LIBRARIES}
 )
 
 
