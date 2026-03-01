@@ -46,7 +46,7 @@
         <position kp="300" dampratio="1" ctrlrange="0 0.05" forcerange="-5000 5000" />
       </default>
       <default class="hande_finger_actuator">
-        <position ctrlrange="0 0.05" forcerange="-5000 5000" kp="200" dampratio="5" />
+        <position ctrlrange="0 0.05" forcerange="-150 150" kp="80" dampratio="2" />
       </default>
       <default class="hande_gripper_slide">
         <joint type="slide" damping="100" range="-1.2 1.2" />
@@ -198,9 +198,12 @@
       <geom name="lego_brick_col"
             type="box"
             size="0.02 0.02 0.02"
-            mass="0.001"
+            mass="0.01"
             rgba="0.6 0.6 0.6 1"
             group="3"
+            solref="0.003 1"
+            solimp="0.9 0.95 0.001"
+            friction="1.0 0.2 0.0001"
             contype="1"
             conaffinity="1"/>
 
@@ -293,10 +296,10 @@
                           <geom mesh="left_finger" class="hande_visual" material="gray" />
                           <geom type="capsule" pos="-0.031 0 0.022" size="0.004 0.02"
                                 solref="0.002 1" solimp="0.9 0.95 0.001" condim="4"
-                                contype="1" conaffinity="1" friction="6 1.5 0.0001" mass="0" />
+                                contype="1" conaffinity="1" friction="1.2 0.2 0.0001" mass="0" />
                           <geom type="capsule" pos="-0.034 0 0.006" size="0.004 0.01"
                                 solref="0.002 1" solimp="0.9 0.95 0.001" condim="4"
-                                contype="1" conaffinity="1" friction="6 1.5 0.0001" mass="0" />
+                                contype="1" conaffinity="1" friction="1.2 0.2 0.0001" mass="0" />
                         </body>
                         <body name="hande_right_finger" pos="0 0 0.099">
                           <inertial pos="-0.02262 0.00759 0.00738" quat="0.871952 -0.0369732 0.211073 0.440205" mass="0.03804" diaginertia="1.22763e-05 1.22763e-05 1.22763e-05" />
@@ -304,10 +307,10 @@
                           <geom mesh="right_finger" class="hande_visual" material="gray" />
                           <geom type="capsule" pos="0.031 0 0.022" size="0.004 0.02"
                                 solref="0.002 1" solimp="0.9 0.95 0.001" condim="4"
-                                contype="1" conaffinity="1" friction="6 1.5 0.0001" mass="0" />
+                                contype="1" conaffinity="1" friction="1.2 0.2 0.0001" mass="0" />
                           <geom type="capsule" pos="0.034 0 0.006" size="0.004 0.01"
                                 solref="0.002 1" solimp="0.9 0.95 0.001" condim="4"
-                                contype="1" conaffinity="1" friction="6 1.5 0.0001" mass="0" />
+                                contype="1" conaffinity="1" friction="1.2 0.2 0.0001" mass="0" />
                         </body>
                         <site name="tcp" pos="-0.005 0 0.135" group="3" />
                       </body>

@@ -19,6 +19,21 @@ void zero_qvel(mjModel* model, mjData* data)
         data->qvel[i] = 0.0;
     }
 }
+
+bool is_gripper_joint(const mjModel* model, int jointId)
+{
+    if (!model || jointId < 0 || jointId >= model->njnt)
+    {
+        return false;
+    }
+    const char* name = mj_id2name(model, mjOBJ_JOINT, jointId);
+    if (!name)
+    {
+        return false;
+    }
+    return (std::strcmp(name, "hande_left_finger_joint") == 0 ||
+            std::strcmp(name, "hande_right_finger_joint") == 0);
+}
 }
 
 dxMuJoCoRobotSimulator::dxMuJoCoRobotSimulator(QObject* parent)
@@ -156,12 +171,6 @@ void dxMuJoCoRobotSimulator::setCtrlTargetsFromJointPositions(const std::vector<
     {
         return;
     }
-    {
-        std::lock_guard<std::mutex> lock(mTargetMutex);
-        mHoldJointTargets = jointPositions;
-        mHoldMode = HoldMode::HoldJointTargets;
-    }
-
     std::vector<int> jointOrder(static_cast<size_t>(mModel->njnt), -1);
     int orderIndex = 0;
     for (int jid = 0; jid < mModel->njnt; ++jid)
@@ -187,6 +196,10 @@ void dxMuJoCoRobotSimulator::setCtrlTargetsFromJointPositions(const std::vector<
         {
             continue;
         }
+        if (is_gripper_joint(mModel, jid))
+        {
+            continue;
+        }
         const int idx = jointOrder[jid];
         if (idx < 0 || idx >= static_cast<int>(jointPositions.size()))
         {
@@ -198,6 +211,8 @@ void dxMuJoCoRobotSimulator::setCtrlTargetsFromJointPositions(const std::vector<
     std::lock_guard<std::mutex> lock(mTargetMutex);
     mPendingCtrlTargets = targets;
     mHasCtrlTargets = true;
+    mHoldCtrlTargets = targets;
+    mHoldMode = HoldMode::HoldCtrlTargets;
 }
 
 void dxMuJoCoRobotSimulator::setJointPositions(const std::vector<double>& jointPositions)
@@ -601,6 +616,10 @@ void dxMuJoCoRobotSimulator::applyCtrlTargetsFromJointPositionsDirect(const std:
         }
         const int jid = mModel->actuator_trnid[2 * aid];
         if (jid < 0 || jid >= mModel->njnt)
+        {
+            continue;
+        }
+        if (is_gripper_joint(mModel, jid))
         {
             continue;
         }
