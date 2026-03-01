@@ -11,9 +11,7 @@
 #include <QTimer>
 
 #include "dxKinMuJoCo.h"
-#include "dxMuJoCoRobotSimulator.h"
-#include "dxMuJoCoRobotViewer.h"
-#include "dxVision.h"
+#include "dxMujocoInterface.h"
 
 class demo : public QObject
 {
@@ -25,7 +23,7 @@ public:
         StopCommands,
         KeepLastPose
     };
-    explicit demo(dxMuJoCoRobotSimulator* simulator, QObject* parent = nullptr);
+    explicit demo(dxMujocoInterface* interfacePtr, QObject* parent = nullptr);
 
     bool init();
 
@@ -37,7 +35,6 @@ public:
     void testPickAndPlace();
     void testCamera();
     void testCamera3D();
-    void setViewer(dxMuJoCoRobotViewer* viewer);
 
     void closeGripper();
     void openGripper();
@@ -46,21 +43,11 @@ public:
     void setEndBehavior(EndBehavior behavior);
 
 signals:
-    void ctrlTargetsReady(const std::vector<double>& targets);
-
-    void updateJointConfig(const std::vector<double>& joints);
-
-    void ctrlTargetsFromJointsReady(const std::vector<double>& joints);
-
     void drawTrajectory(const std::vector<std::array<double, 3>>& points);
     void drawFrames(const std::vector<std::array<double, 12>>& frames);
-    void closeGripperRequested();
-    void gripperPositionRequested(double ratio);
     void trajectoryFinished();
 
     void updateUIMessage(std::string msg);
-    void cameraStreamRequested(bool enabled);
-    void cameraPointCloudRequested();
 
 private:
     void startTrajectoryPlayback();
@@ -72,15 +59,13 @@ private:
                          const std::vector<double>& goalPose,
                          std::vector<std::vector<double>>& trajectory,
                          int steps);
-    bool buildPoseFromJoints(const std::vector<double>& joints, std::vector<double>& outPose);
     bool sendRobotTo(const std::vector<double>& fromPose,
                      const std::vector<double>& toPose,
                      int steps);
     void waitSteps(int holdSteps);
     void setGripperHoldRatio(double ratio);
 
-    dxMuJoCoRobotSimulator* mSim = nullptr;
-    dxMuJoCoRobotViewer* mViewer = nullptr;
+    dxMujocoInterface* mInterface = nullptr;
 
     std::vector<std::vector<double>> mTrajectory;
     std::vector<std::pair<size_t, double>> mGripperEvents;
@@ -91,12 +76,9 @@ private:
     size_t mTrajectoryIndex = 0;
     QTimer* mTrajectoryTimer = nullptr;
     EndBehavior mEndBehavior = EndBehavior::StopCommands;
-    std::vector<int> mArmDofIndices;
-    std::vector<int> mGripperDofIndices;
-
-    std::unique_ptr<dxKinMuJoCo> mKin;
 
     bool mGripperHoldEnabled = false;
     double mGripperHoldRatio = 0.0;
 
+    std::unique_ptr<dxKinMuJoCo> mKin;
 };

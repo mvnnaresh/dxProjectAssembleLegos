@@ -49,10 +49,6 @@ public slots:
     void setGripperPosition(double ratio);
     void printContacts(int maxContacts, double minDist);
     void printContactsForGeom(const QString& geomName, double minDist);
-    void setPdGains(double kp, double kd);
-    void enablePdHold(bool enabled);
-    void enableHardLock(bool enabled);
-    void lockCurrentPose();
 
 signals:
     void modelLoaded(mjModel* model);
@@ -80,7 +76,6 @@ private:
     void applyCtrlTargetsDirect(const std::vector<double>& targets);
     void applyCtrlTargetsFromJointPositionsDirect(const std::vector<double>& jointPositions);
     void applyJointPositionsDirect(const std::vector<double>& jointPositions, bool onlyActuated = false);
-    void applyPdHoldFromJointTargets(const std::vector<double>& jointPositions);
     std::vector<int> getTendonActuatorIndices() const;
     std::vector<int> getGripperJointActuatorIndices() const;
     void updateStateSnapshot();
@@ -99,10 +94,6 @@ private:
     HoldMode mHoldMode = HoldMode::HoldJointTargets;
     std::vector<double> mHoldJointTargets;
     std::vector<double> mHoldCtrlTargets;
-    bool mEnablePdHold = false;
-    double mPdKp = 50.0;
-    double mPdKd = 5.0;
-    bool mEnableHardLock = false;
 
     QString mModelPath;
     bool mPoseApplied = false;

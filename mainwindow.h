@@ -2,15 +2,14 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QThread>
 #include <QLabel>
 #include <QPushButton>
 #include <QDebug>
 #include <memory>
 #include <unordered_map>
 
-#include "dxMuJoCoRobotSimulator.h"
 #include "dxMuJoCoRobotViewer.h"
+#include "dxMujocoInterface.h"
 #include "demo.h"
 #include "dxVision.h"
 
@@ -38,8 +37,7 @@ private slots:
 private:
     Ui::MainWindow *ui;
     dxMuJoCoRobotViewer* mViewer = nullptr;
-    dxMuJoCoRobotSimulator* mSim = nullptr;
-    QThread* mSimThread = nullptr;
+    dxMujocoInterface* mInterface = nullptr;
     std::unique_ptr<demo> mDemo;
     QWidget* mViewerContainer = nullptr;
     QLabel* mCameraLabel = nullptr;

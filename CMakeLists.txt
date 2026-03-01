@@ -106,7 +106,9 @@ add_executable(dxProjectAssembleLegos main.cpp
     dxMuJoCoRealSense.h
     dxMuJoCoRealSense.cpp
 	dxVision.h
-	dxVision.cpp)
+	dxVision.cpp
+    dxMujocoInterface.h
+    dxMujocoInterface.cpp)
 
 target_include_directories(dxProjectAssembleLegos PRIVATE
   ${Boost_INCLUDE_DIRS}

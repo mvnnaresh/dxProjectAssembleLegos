@@ -9,6 +9,7 @@
 
 #include "dxKinMuJoCo.h"
 #include "dxPlannerSimple.h"
+#include "dxVision.h"
 
 namespace
 {
@@ -16,8 +17,8 @@ constexpr double kGripperOpenRatio = 0.0;
 constexpr double kGripperCloseRatio = 1.0;
 }
 
-demo::demo(dxMuJoCoRobotSimulator* simulator, QObject* parent)
-    : QObject(parent), mSim(simulator)
+demo::demo(dxMujocoInterface* interfacePtr, QObject* parent)
+    : QObject(parent), mInterface(interfacePtr)
 {
     mTrajectoryTimer = new QTimer(this);
     mTrajectoryTimer->setInterval(20);
@@ -38,7 +39,14 @@ demo::demo(dxMuJoCoRobotSimulator* simulator, QObject* parent)
             }
 
             const std::vector<double>& joints = mTrajectory.back();
-            emit ctrlTargetsFromJointsReady(joints);
+            if (mInterface)
+            {
+                mInterface->setCtrlTargetsFromJointPositions(joints);
+            }
+            if (mGripperLatched && mInterface)
+            {
+                mInterface->setGripperPosition(mGripperLatchedValue);
+            }
             return;
         }
 
@@ -46,19 +54,25 @@ demo::demo(dxMuJoCoRobotSimulator* simulator, QObject* parent)
                 mTrajectoryIndex == mGripperEvents[mGripperEventIndex].first)
         {
             const double value = mGripperEvents[mGripperEventIndex].second;
-            emit gripperPositionRequested(value);
+            if (mInterface)
+            {
+                mInterface->setGripperPosition(value);
+            }
             mGripperLatched = true;
             mGripperLatchedValue = value;
             ++mGripperEventIndex;
         }
 
-        if (mGripperLatched)
+        if (mGripperLatched && mInterface)
         {
-            emit gripperPositionRequested(mGripperLatchedValue);
+            mInterface->setGripperPosition(mGripperLatchedValue);
         }
 
         const std::vector<double>& joints = mTrajectory[mTrajectoryIndex++];
-        emit ctrlTargetsFromJointsReady(joints);
+        if (mInterface)
+        {
+            mInterface->setCtrlTargetsFromJointPositions(joints);
+        }
     });
 
 }
@@ -66,15 +80,12 @@ demo::demo(dxMuJoCoRobotSimulator* simulator, QObject* parent)
 // Initialize kinematics helper after the simulator has a model loaded.
 bool demo::init()
 {
-    if (!mSim || !mSim->model())
+    if (!mInterface || !mInterface->model())
     {
         return false;
     }
 
-    mSim->enableHardLock(false);
-    mSim->enablePdHold(false);
-
-    mKin = std::make_unique<dxKinMuJoCo>(mSim->model(), mSim->data());
+    mKin = std::make_unique<dxKinMuJoCo>(mInterface->model(), mInterface->data());
 
     emit updateUIMessage("Demo Initalised!!");
     return true;
@@ -100,46 +111,17 @@ void demo::startTrajectoryPlayback()
     }
 }
 
-//std::vector<double> demo::extractArmDof(const std::vector<double>& dofQpos) const
-//{
-//    std::vector<double> out;
-//    out.reserve(mArmDofIndices.size());
-//    for (int idx : mArmDofIndices)
-//    {
-//        if (idx >= 0 && static_cast<size_t>(idx) < dofQpos.size())
-//        {
-//            out.push_back(dofQpos[static_cast<size_t>(idx)]);
-//        }
-//    }
-//    return out;
-//}
-//
-//std::vector<double> demo::expandArmDof(const std::vector<double>& baseDof,
-//                                       const std::vector<double>& armDof) const
-//{
-//    std::vector<double> out = baseDof;
-//    const size_t limit = std::min(mArmDofIndices.size(), armDof.size());
-//    for (size_t i = 0; i < limit; ++i)
-//    {
-//        const int idx = mArmDofIndices[i];
-//        if (idx >= 0 && static_cast<size_t>(idx) < out.size())
-//        {
-//            out[static_cast<size_t>(idx)] = armDof[i];
-//        }
-//    }
-//    return out;
-//}
 
 // Validate FK/IK by computing the current pose and attempting to solve IK back to it.
 void demo::testKinematics()
 {
-    if (!mSim || !mSim->model())
+    if (!mInterface || !mInterface->model())
     {
         return;
     }
 
-    dxKinMuJoCo kin(mSim->model(), mSim->data());
-    const dxMuJoCoRobotState state = mSim->getRobotState();
+    dxKinMuJoCo kin(mInterface->model(), mInterface->data());
+    const dxMuJoCoRobotState state = mInterface->getRobotState();
 
     dxKinMuJoCo::PoseResult fkResult;
     if (!kin.getFK(state.jointConf, fkResult))
@@ -180,10 +162,10 @@ void demo::testKinematics()
 // Simplified planner test: start from current state, add +25 deg to arm joints, then execute.
 void demo::testPlannerSimple()
 {
-    if (!mSim || !mSim->model())
+    if (!mInterface || !mInterface->model())
         return;
 
-    dxKinMuJoCo kin(mSim->model(), mSim->data());
+    dxKinMuJoCo kin(mInterface->model(), mInterface->data());
     dxPlannerSimple planner(&kin);
 
     if (!planner.init())
@@ -200,7 +182,7 @@ void demo::testPlannerSimple()
 
 
     //!----- set planner start Position
-    std::vector<double> start = mSim->getRobotState().jointConf;
+    std::vector<double> start = mInterface->getRobotState().jointConf;
     planner.setStart(start);
 
     //!----- set Planner Goal Position
@@ -236,12 +218,12 @@ void demo::testPlannerSimple()
 // Cartesian planner test: move along +X while keeping orientation.
 void demo::testPlannerCartesian()
 {
-    if (!mSim || !mSim->model())
+    if (!mInterface || !mInterface->model())
     {
         return;
     }
 
-    dxKinMuJoCo kin(mSim->model(), mSim->data());
+    dxKinMuJoCo kin(mInterface->model(), mInterface->data());
     dxPlannerSimple planner(&kin);
     if (!planner.init())
     {
@@ -254,7 +236,7 @@ void demo::testPlannerCartesian()
     params.collisionDist = -0.001;
     planner.setParams(params);
 
-    const dxMuJoCoRobotState state = mSim->getRobotState();
+    const dxMuJoCoRobotState state = mInterface->getRobotState();
     dxKinMuJoCo::PoseResult fkResult;
     if (!kin.getFK(state.jointConf, fkResult))
     {
@@ -303,16 +285,7 @@ void demo::testPlannerCartesian()
     mTrajectory.reserve(trajectory.size());
     for (const auto& point : trajectory)
     {
-        std::vector<double> full = point;
-        for (size_t i = 0; i < mGripperDofIndices.size(); ++i)
-        {
-            const int idx = mGripperDofIndices[i];
-            if (idx >= 0 && static_cast<size_t>(idx) < full.size() && static_cast<size_t>(idx) < seed.size())
-            {
-                full[static_cast<size_t>(idx)] = seed[static_cast<size_t>(idx)];
-            }
-        }
-        mTrajectory.push_back(std::move(full));
+        mTrajectory.push_back(point);
     }
     emit drawTrajectory(planner.getTrajAs3DPoints(mTrajectory));
     startTrajectoryPlayback();
@@ -321,18 +294,18 @@ void demo::testPlannerCartesian()
 
 void demo::testPickAndPlace()
 {
-    if (!mSim || !mSim->model() || !mKin)
+    if (!mInterface || !mInterface->model() || !mKin)
     {
         return;
     }
 
-    const dxMuJoCoRobotState state = mSim->getRobotState();
+    const dxMuJoCoRobotState state = mInterface->getRobotState();
     if (state.jointConf.empty())
     {
         return;
     }
 
-    std::vector<double> cubePose = mSim->getBodyPoseByName("lego_brick");
+    std::vector<double> cubePose = mInterface->getBodyPoseByName("lego_brick");
     const double cubeX = cubePose[0];
     const double cubeY = cubePose[1];
     const double cubeZ = cubePose[2];
@@ -386,6 +359,7 @@ void demo::testPickAndPlace()
     sendRobotTo(preplacePose, placePose, 40);
     std::cout << "[testPickAndPlace3] reached place" << std::endl;
 
+    waitSteps(40);
     openGripper();
     waitSteps(40);
 
@@ -395,27 +369,47 @@ void demo::testPickAndPlace()
 
 void demo::testCamera()
 {
-    emit cameraStreamRequested(true);
-    emit cameraPointCloudRequested();
-    emit updateUIMessage("Camera RGB + point cloud requested.");
-}
+    if (!mInterface)
+    {
+        emit updateUIMessage("No MuJoCo interface available for camera capture.");
+        return;
+    }
 
-void demo::testCamera3D()
-{
-    if (!mViewer)
+    dxMuJoCoRobotViewer* viewer = mInterface->viewer();
+    if (!viewer)
     {
         emit updateUIMessage("No viewer available for camera capture.");
         return;
     }
 
-    mViewer->runWithContext([this]()
+    viewer->setCameraStreamEnabled(true);
+    viewer->requestPointCloudCapture();
+    emit updateUIMessage("Camera RGB + point cloud requested.");
+}
+
+void demo::testCamera3D()
+{
+    if (!mInterface)
+    {
+        emit updateUIMessage("No MuJoCo interface available for camera capture.");
+        return;
+    }
+
+    dxMuJoCoRobotViewer* viewer = mInterface->viewer();
+    if (!viewer)
+    {
+        emit updateUIMessage("No viewer available for camera capture.");
+        return;
+    }
+
+    viewer->runWithContext([this, viewer]()
     {
         dxVision camA;
         MuJoCoCameraParams mujoparams;
-        mujoparams.model = mViewer->model();
-        mujoparams.data = mViewer->data();
-        mujoparams.opt = mViewer->mjvOptionPtr();
-        mujoparams.ctx = mViewer->mjrContextPtr();
+        mujoparams.model = viewer->model();
+        mujoparams.data = viewer->data();
+        mujoparams.opt = viewer->mjvOptionPtr();
+        mujoparams.ctx = viewer->mjrContextPtr();
         mujoparams.cameraName = "scene_cam";
         mujoparams.baseBodyName = "base";
         mujoparams.width = 640;
@@ -435,11 +429,6 @@ void demo::testCamera3D()
     emit updateUIMessage("Camera point cloud requested.");
 }
 
-void demo::setViewer(dxMuJoCoRobotViewer* viewer)
-{
-    mViewer = viewer;
-}
-
 bool demo::sendRobotTo(const std::vector<double>& fromPose,
                        const std::vector<double>& toPose,
                        int steps)
@@ -452,19 +441,6 @@ bool demo::sendRobotTo(const std::vector<double>& fromPose,
     if (trajectory.empty())
     {
         return false;
-    }
-
-    const dxMuJoCoRobotState holdState = mSim->getRobotState();
-    for (auto& point : trajectory)
-    {
-        for (int idx : mGripperDofIndices)
-        {
-            if (idx >= 0 && static_cast<size_t>(idx) < point.size() &&
-                    static_cast<size_t>(idx) < holdState.jointConf.size())
-            {
-                point[static_cast<size_t>(idx)] = holdState.jointConf[static_cast<size_t>(idx)];
-            }
-        }
     }
 
     mTrajectory = std::move(trajectory);
@@ -484,7 +460,7 @@ bool demo::sendRobotTo(const std::vector<double>& fromPose,
 
 void demo::waitSteps(int holdSteps)
 {
-    const dxMuJoCoRobotState holdState = mSim->getRobotState();
+    const dxMuJoCoRobotState holdState = mInterface->getRobotState();
     if (holdState.jointConf.empty())
     {
         return;
@@ -503,15 +479,6 @@ void demo::waitSteps(int holdSteps)
     loop.exec();
     disconnect(conn);
 }
-
-void demo::setGripperHoldRatio(double ratio)
-{
-    mGripperHoldEnabled = true;
-    mGripperHoldRatio = ratio;
-    emit gripperPositionRequested(ratio);
-}
-
-
 
 
 bool demo::planCartesianTo(const std::vector<double>& startPose,
@@ -535,7 +502,7 @@ bool demo::planCartesianTo(const std::vector<double>& startPose,
     params.collisionDist = -0.001;
     planner.setParams(params);
 
-    const std::vector<double> seed = mSim->getRobotState().jointConf;
+    const std::vector<double> seed = mInterface->getRobotState().jointConf;
     if (seed.empty())
     {
         return false;
@@ -544,6 +511,16 @@ bool demo::planCartesianTo(const std::vector<double>& startPose,
     return planner.planCartesian(startPose, goalPose, seed, trajectory, params.steps);
 }
 
+
+void demo::setGripperHoldRatio(double ratio)
+{
+    mGripperHoldEnabled = true;
+    mGripperHoldRatio = ratio;
+    if (mInterface)
+    {
+        mInterface->setGripperPosition(ratio);
+    }
+}
 
 void demo::closeGripper()
 {
@@ -557,10 +534,14 @@ void demo::openGripper()
 
 void demo::setGripperPosition(double ratio)
 {
-    emit gripperPositionRequested(ratio);
+    if (mInterface)
+    {
+        mInterface->setGripperPosition(ratio);
+    }
 }
 
 void demo::setEndBehavior(EndBehavior behavior)
 {
     mEndBehavior = behavior;
 }
+

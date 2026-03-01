@@ -24,7 +24,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     qRegisterMetaType<std::vector<double>>("std::vector<double>");
     qRegisterMetaType<std::vector<std::array<double, 3>>>("std::vector<std::array<double, 3>>");
 
-    mViewer = new dxMuJoCoRobotViewer();
+    mInterface = new dxMujocoInterface(this);
+    mViewer = mInterface->viewer();
     mViewerContainer = QWidget::createWindowContainer(mViewer, this);
     setCentralWidget(mViewerContainer);
 
@@ -129,11 +130,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
         }
     });
 
-    mSim = new dxMuJoCoRobotSimulator();
-    mSim->setControlRateHz(250.0);
-    mSimThread = new QThread(this);
-    mSim->moveToThread(mSimThread);
-
     auto resolveModelPath = [](const std::string& relPath) -> std::string
     {
         const QString path = QString::fromStdString(relPath);
@@ -165,46 +161,26 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
 
     mModelPath = resolveModelPath(mModelPath);
 
-    connect(mSimThread, &QThread::finished, mSim, &QObject::deleteLater);
-    mSimThread->start();
-
-    connect(mSim, &dxMuJoCoRobotSimulator::modelLoaded, this, &MainWindow::onModelLoaded);
-    connect(mSim, &dxMuJoCoRobotSimulator::stateUpdated, this, &MainWindow::onStateUpdated);
+    connect(mInterface, &dxMujocoInterface::modelLoaded, this, &MainWindow::onModelLoaded);
+    connect(mInterface, &dxMujocoInterface::stateUpdated, this, &MainWindow::onStateUpdated);
 
     connect(initButton, &QPushButton::clicked, this, [this]()
     {
         if (!mDemo)
         {
-            mDemo = std::make_unique<demo>(mSim);
-            connect(mDemo.get(), &demo::ctrlTargetsReady,
-                    mSim, &dxMuJoCoRobotSimulator::setCtrlTargets, Qt::QueuedConnection);
-            connect(mDemo.get(), &demo::updateJointConfig,
-                    mSim, &dxMuJoCoRobotSimulator::setJointPositions, Qt::QueuedConnection);
-            connect(mDemo.get(), &demo::ctrlTargetsFromJointsReady,
-                    mSim, &dxMuJoCoRobotSimulator::setCtrlTargetsFromJointPositions, Qt::QueuedConnection);
+            mDemo = std::make_unique<demo>(mInterface);
             connect(mDemo.get(), &demo::drawTrajectory,
                     mViewer, &dxMuJoCoRobotViewer::drawTrajectory);
             connect(mDemo.get(), &demo::drawFrames,
                     mViewer, &dxMuJoCoRobotViewer::drawFrames);
-            connect(mDemo.get(), &demo::closeGripperRequested,
-                    mSim, &dxMuJoCoRobotSimulator::closeGripper, Qt::QueuedConnection);
-            connect(mDemo.get(), &demo::gripperPositionRequested,
-                    mSim, &dxMuJoCoRobotSimulator::setGripperPosition, Qt::QueuedConnection);
-            mDemo->setViewer(mViewer);
-
             connect(mDemo.get(), &demo::updateUIMessage,
                     this, &MainWindow::setStatusMessage);
-            connect(mDemo.get(), &demo::cameraStreamRequested,
-                    mViewer, &dxMuJoCoRobotViewer::setCameraStreamEnabled);
-            connect(mDemo.get(), &demo::cameraPointCloudRequested,
-                    mViewer, &dxMuJoCoRobotViewer::requestPointCloudCapture);
         }
         if (mViewer)
         {
             mViewer->setModel(nullptr);
         }
-        QMetaObject::invokeMethod(mSim, "loadModel", Qt::QueuedConnection,
-                                  Q_ARG(QString, QString::fromStdString(mModelPath)));
+        mInterface->loadModel(QString::fromStdString(mModelPath));
 
     });
 
@@ -284,15 +260,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
 
 MainWindow::~MainWindow()
 {
-    if (mSim)
-    {
-        QMetaObject::invokeMethod(mSim, "stop", Qt::QueuedConnection);
-    }
-    if (mSimThread)
-    {
-        mSimThread->quit();
-        mSimThread->wait();
-    }
     delete ui;
 }
 
@@ -320,17 +287,17 @@ void MainWindow::onModelLoaded(mjModel* model) const
     {
         return;
     }
-    if (mSim)
+    if (mInterface)
     {
-        QMetaObject::invokeMethod(mSim, "start", Qt::QueuedConnection);
+        mInterface->start();
     }
 }
 
 void MainWindow::onStateUpdated() const
 {
-    if (mViewer && mSim)
+    if (mViewer && mInterface)
     {
-        mViewer->applyState(mSim->getRobotState());
+        mViewer->applyState(mInterface->getRobotState());
     }
 }
 
