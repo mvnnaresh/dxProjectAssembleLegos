@@ -37,6 +37,7 @@ public:
     void setCtrlTargets(const std::vector<double>& targets);
     void setCtrlTargetsFromJointPositions(const std::vector<double>& jointPositions);
     void setJointPositions(const std::vector<double>& jointPositions);
+    void setArmDofCount(int armDofCount);
     void closeGripper();
     void setGripperPosition(double ratio);
 

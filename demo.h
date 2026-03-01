@@ -5,8 +5,6 @@
 #include <vector>
 #include <utility>
 
-#include <functional>
-
 #include <QObject>
 #include <QTimer>
 
@@ -51,10 +49,6 @@ signals:
 
 private:
     void startTrajectoryPlayback();
-    //void buildDofGroups();
-    //std::vector<double> extractArmDof(const std::vector<double>& dofQpos) const;
-    //std::vector<double> expandArmDof(const std::vector<double>& baseDof,
-    //                                 const std::vector<double>& armDof) const;
     bool planCartesianTo(const std::vector<double>& startPose,
                          const std::vector<double>& goalPose,
                          std::vector<std::vector<double>>& trajectory,
@@ -63,22 +57,13 @@ private:
                      const std::vector<double>& toPose,
                      int steps);
     void waitSteps(int holdSteps);
-    void setGripperHoldRatio(double ratio);
 
     dxMujocoInterface* mInterface = nullptr;
 
     std::vector<std::vector<double>> mTrajectory;
-    std::vector<std::pair<size_t, double>> mGripperEvents;
-    size_t mGripperEventIndex = 0;
-    bool mGripperLatched = false;
-    double mGripperLatchedValue = 0.0;
-
     size_t mTrajectoryIndex = 0;
     QTimer* mTrajectoryTimer = nullptr;
     EndBehavior mEndBehavior = EndBehavior::StopCommands;
-
-    bool mGripperHoldEnabled = false;
-    double mGripperHoldRatio = 0.0;
 
     std::unique_ptr<dxKinMuJoCo> mKin;
 };

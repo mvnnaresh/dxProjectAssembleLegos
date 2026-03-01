@@ -195,6 +195,7 @@
       <freejoint/>
 
       <!-- Collision + mass (keep similar "feel" to your 1 g cube) -->
+      <!-- Grasp tuning: mass/contacts for stable pick and release -->
       <geom name="lego_brick_col"
             type="box"
             size="0.02 0.02 0.02"
@@ -290,24 +291,26 @@
                         <geom type="cylinder" pos="0 0 0.071" size="0.03 0.007" class="hande_collision" />
                         <geom type="cylinder" pos="0.005 0 0.088" size="0.032 0.01" class="hande_collision" />
                         <geom type="cylinder" pos="-0.005 0 0.088" size="0.032 0.01" class="hande_collision" />
-                        <body name="hande_left_finger" pos="0 0 0.099">
-                          <inertial pos="0.02262 -0.00759 0.00738" quat="0.871952 0.0369732 -0.211073 0.440205" mass="0.03804" diaginertia="1.22763e-05 1.22763e-05 1.22763e-05" />
-                          <joint name="hande_left_finger_joint" axis="1 0 0" class="hande_finger_slide" />
-                          <geom mesh="left_finger" class="hande_visual" material="gray" />
-                          <geom type="capsule" pos="-0.031 0 0.022" size="0.004 0.02"
-                                solref="0.002 1" solimp="0.9 0.95 0.001" condim="4"
-                                contype="1" conaffinity="1" friction="1.2 0.2 0.0001" mass="0" />
+        <body name="hande_left_finger" pos="0 0 0.099">
+          <inertial pos="0.02262 -0.00759 0.00738" quat="0.871952 0.0369732 -0.211073 0.440205" mass="0.03804" diaginertia="1.22763e-05 1.22763e-05 1.22763e-05" />
+          <joint name="hande_left_finger_joint" axis="1 0 0" class="hande_finger_slide" />
+          <geom mesh="left_finger" class="hande_visual" material="gray" />
+          <!-- Grasp tuning: finger contact friction -->
+          <geom type="capsule" pos="-0.031 0 0.022" size="0.004 0.02"
+                solref="0.002 1" solimp="0.9 0.95 0.001" condim="4"
+                contype="1" conaffinity="1" friction="1.2 0.2 0.0001" mass="0" />
                           <geom type="capsule" pos="-0.034 0 0.006" size="0.004 0.01"
                                 solref="0.002 1" solimp="0.9 0.95 0.001" condim="4"
                                 contype="1" conaffinity="1" friction="1.2 0.2 0.0001" mass="0" />
                         </body>
-                        <body name="hande_right_finger" pos="0 0 0.099">
-                          <inertial pos="-0.02262 0.00759 0.00738" quat="0.871952 -0.0369732 0.211073 0.440205" mass="0.03804" diaginertia="1.22763e-05 1.22763e-05 1.22763e-05" />
-                          <joint name="hande_right_finger_joint" axis="-1 0 0" class="hande_finger_slide" />
-                          <geom mesh="right_finger" class="hande_visual" material="gray" />
-                          <geom type="capsule" pos="0.031 0 0.022" size="0.004 0.02"
-                                solref="0.002 1" solimp="0.9 0.95 0.001" condim="4"
-                                contype="1" conaffinity="1" friction="1.2 0.2 0.0001" mass="0" />
+        <body name="hande_right_finger" pos="0 0 0.099">
+          <inertial pos="-0.02262 0.00759 0.00738" quat="0.871952 -0.0369732 0.211073 0.440205" mass="0.03804" diaginertia="1.22763e-05 1.22763e-05 1.22763e-05" />
+          <joint name="hande_right_finger_joint" axis="-1 0 0" class="hande_finger_slide" />
+          <geom mesh="right_finger" class="hande_visual" material="gray" />
+          <!-- Grasp tuning: finger contact friction -->
+          <geom type="capsule" pos="0.031 0 0.022" size="0.004 0.02"
+                solref="0.002 1" solimp="0.9 0.95 0.001" condim="4"
+                contype="1" conaffinity="1" friction="1.2 0.2 0.0001" mass="0" />
                           <geom type="capsule" pos="0.034 0 0.006" size="0.004 0.01"
                                 solref="0.002 1" solimp="0.9 0.95 0.001" condim="4"
                                 contype="1" conaffinity="1" friction="1.2 0.2 0.0001" mass="0" />

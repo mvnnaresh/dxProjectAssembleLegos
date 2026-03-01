@@ -1,7 +1,5 @@
 #include "demo.h"
 
-#include <unordered_set>
-#include <cstring>
 #include <iostream>
 #include <QEventLoop>
 #include <QMetaObject>
@@ -43,29 +41,7 @@ demo::demo(dxMujocoInterface* interfacePtr, QObject* parent)
             {
                 mInterface->setCtrlTargetsFromJointPositions(joints);
             }
-            if (mGripperLatched && mInterface)
-            {
-                mInterface->setGripperPosition(mGripperLatchedValue);
-            }
             return;
-        }
-
-        if (mGripperEventIndex < mGripperEvents.size() &&
-                mTrajectoryIndex == mGripperEvents[mGripperEventIndex].first)
-        {
-            const double value = mGripperEvents[mGripperEventIndex].second;
-            if (mInterface)
-            {
-                mInterface->setGripperPosition(value);
-            }
-            mGripperLatched = true;
-            mGripperLatchedValue = value;
-            ++mGripperEventIndex;
-        }
-
-        if (mGripperLatched && mInterface)
-        {
-            mInterface->setGripperPosition(mGripperLatchedValue);
         }
 
         const std::vector<double>& joints = mTrajectory[mTrajectoryIndex++];
@@ -87,6 +63,8 @@ bool demo::init()
 
     mKin = std::make_unique<dxKinMuJoCo>(mInterface->model(), mInterface->data());
 
+    mInterface->setArmDofCount(6);
+
     emit updateUIMessage("Demo Initalised!!");
     return true;
 }
@@ -102,9 +80,6 @@ void demo::startTrajectoryPlayback()
         return;
     }
     mTrajectoryIndex = 0;
-    mGripperEventIndex = 0;
-    mGripperLatched = false;
-    mGripperLatchedValue = 0.0;
     if (!mTrajectoryTimer->isActive())
     {
         mTrajectoryTimer->start();
@@ -444,12 +419,6 @@ bool demo::sendRobotTo(const std::vector<double>& fromPose,
     }
 
     mTrajectory = std::move(trajectory);
-    mGripperEvents.clear();
-    if (mGripperHoldEnabled)
-    {
-        mGripperEvents.emplace_back(0, mGripperHoldRatio);
-    }
-
     QEventLoop loop;
     const QMetaObject::Connection conn = connect(this, &demo::trajectoryFinished, &loop, &QEventLoop::quit);
     startTrajectoryPlayback();
@@ -467,12 +436,6 @@ void demo::waitSteps(int holdSteps)
     }
 
     mTrajectory.assign(static_cast<size_t>(std::max(1, holdSteps)), holdState.jointConf);
-    mGripperEvents.clear();
-    if (mGripperHoldEnabled)
-    {
-        mGripperEvents.emplace_back(0, mGripperHoldRatio);
-    }
-
     QEventLoop loop;
     const QMetaObject::Connection conn = connect(this, &demo::trajectoryFinished, &loop, &QEventLoop::quit);
     startTrajectoryPlayback();
@@ -512,24 +475,14 @@ bool demo::planCartesianTo(const std::vector<double>& startPose,
 }
 
 
-void demo::setGripperHoldRatio(double ratio)
-{
-    mGripperHoldEnabled = true;
-    mGripperHoldRatio = ratio;
-    if (mInterface)
-    {
-        mInterface->setGripperPosition(ratio);
-    }
-}
-
 void demo::closeGripper()
 {
-    setGripperHoldRatio(kGripperCloseRatio);
+    setGripperPosition(kGripperCloseRatio);
 }
 
 void demo::openGripper()
 {
-    setGripperHoldRatio(kGripperOpenRatio);
+    setGripperPosition(kGripperOpenRatio);
 }
 
 void demo::setGripperPosition(double ratio)

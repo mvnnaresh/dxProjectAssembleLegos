@@ -20,20 +20,6 @@ void zero_qvel(mjModel* model, mjData* data)
     }
 }
 
-bool is_gripper_joint(const mjModel* model, int jointId)
-{
-    if (!model || jointId < 0 || jointId >= model->njnt)
-    {
-        return false;
-    }
-    const char* name = mj_id2name(model, mjOBJ_JOINT, jointId);
-    if (!name)
-    {
-        return false;
-    }
-    return (std::strcmp(name, "hande_left_finger_joint") == 0 ||
-            std::strcmp(name, "hande_right_finger_joint") == 0);
-}
 }
 
 dxMuJoCoRobotSimulator::dxMuJoCoRobotSimulator(QObject* parent)
@@ -165,6 +151,11 @@ void dxMuJoCoRobotSimulator::setCtrlByName(const std::string& actuatorName, doub
     mPendingNamedCtrls.emplace_back(actuatorName, value);
 }
 
+void dxMuJoCoRobotSimulator::setArmDofCount(int armDofCount)
+{
+    mArmDofCount = armDofCount;
+}
+
 void dxMuJoCoRobotSimulator::setCtrlTargetsFromJointPositions(const std::vector<double>& jointPositions)
 {
     if (!mModel || jointPositions.empty())
@@ -196,12 +187,12 @@ void dxMuJoCoRobotSimulator::setCtrlTargetsFromJointPositions(const std::vector<
         {
             continue;
         }
-        if (is_gripper_joint(mModel, jid))
+        const int idx = jointOrder[jid];
+        if (idx < 0 || idx >= static_cast<int>(jointPositions.size()))
         {
             continue;
         }
-        const int idx = jointOrder[jid];
-        if (idx < 0 || idx >= static_cast<int>(jointPositions.size()))
+        if (mArmDofCount >= 0 && idx >= mArmDofCount)
         {
             continue;
         }
@@ -619,12 +610,12 @@ void dxMuJoCoRobotSimulator::applyCtrlTargetsFromJointPositionsDirect(const std:
         {
             continue;
         }
-        if (is_gripper_joint(mModel, jid))
+        const int idx = jointOrder[jid];
+        if (idx < 0 || idx >= static_cast<int>(jointPositions.size()))
         {
             continue;
         }
-        const int idx = jointOrder[jid];
-        if (idx < 0 || idx >= static_cast<int>(jointPositions.size()))
+        if (mArmDofCount >= 0 && idx >= mArmDofCount)
         {
             continue;
         }

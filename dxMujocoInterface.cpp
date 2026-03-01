@@ -110,6 +110,15 @@ void dxMujocoInterface::setJointPositions(const std::vector<double>& jointPositi
     }
 }
 
+void dxMujocoInterface::setArmDofCount(int armDofCount)
+{
+    if (mSim)
+    {
+        QMetaObject::invokeMethod(mSim.get(), "setArmDofCount", Qt::QueuedConnection,
+                                  Q_ARG(int, armDofCount));
+    }
+}
+
 void dxMujocoInterface::closeGripper()
 {
     if (mSim)

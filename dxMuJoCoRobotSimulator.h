@@ -42,6 +42,7 @@ public slots:
     void reset();
     void start();
     void stop();
+    void setArmDofCount(int armDofCount);
     void setCtrlTargets(const std::vector<double>& targets);
     void setCtrlTargetsFromJointPositions(const std::vector<double>& jointPositions);
     void setJointPositions(const std::vector<double>& jointPositions);
@@ -94,6 +95,7 @@ private:
     HoldMode mHoldMode = HoldMode::HoldJointTargets;
     std::vector<double> mHoldJointTargets;
     std::vector<double> mHoldCtrlTargets;
+    int mArmDofCount = -1;
 
     QString mModelPath;
     bool mPoseApplied = false;
