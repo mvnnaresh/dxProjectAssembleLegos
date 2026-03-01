@@ -8,29 +8,17 @@ dxMujocoInterface::dxMujocoInterface(QObject* parent)
 {
     qRegisterMetaType<std::vector<double>>("std::vector<double>");
 
-    mViewer = std::make_unique<dxMuJoCoRobotViewer>();
-    mSim = std::make_unique<dxMuJoCoRobotSimulator>();
-    mSimThread = new QThread(this);
-    mSim->moveToThread(mSimThread);
-
-    connect(mSimThread, &QThread::finished, mSim.get(), &QObject::deleteLater);
-    connect(mSim.get(), &dxMuJoCoRobotSimulator::modelLoaded, this, &dxMujocoInterface::modelLoaded);
-    connect(mSim.get(), &dxMuJoCoRobotSimulator::stateUpdated, this, &dxMujocoInterface::stateUpdated);
-    connect(mSim.get(), &dxMuJoCoRobotSimulator::resetDone, this, &dxMujocoInterface::resetDone);
-    connect(mSim.get(), &dxMuJoCoRobotSimulator::error, this, &dxMujocoInterface::error);
-
-    mSimThread->start();
+    mViewer = new dxMuJoCoRobotViewer();
 }
 
 dxMujocoInterface::~dxMujocoInterface()
 {
-    stop();
-    shutdownThread();
+    shutdown();
 }
 
 dxMuJoCoRobotViewer* dxMujocoInterface::viewer() const
 {
-    return mViewer.get();
+    return mViewer;
 }
 
 mjModel* dxMujocoInterface::model() const
@@ -101,6 +89,15 @@ void dxMujocoInterface::setCtrlTargetsFromJointPositions(const std::vector<doubl
     }
 }
 
+void dxMujocoInterface::setCtrlTargetsFromFullJointPositions(const std::vector<double>& jointPositions)
+{
+    if (mSim)
+    {
+        QMetaObject::invokeMethod(mSim.get(), "setCtrlTargetsFromFullJointPositions", Qt::QueuedConnection,
+                                  Q_ARG(std::vector<double>, jointPositions));
+    }
+}
+
 void dxMujocoInterface::setJointPositions(const std::vector<double>& jointPositions)
 {
     if (mSim)
@@ -138,6 +135,7 @@ void dxMujocoInterface::setGripperPosition(double ratio)
 
 void dxMujocoInterface::loadModel(const QString& modelPath)
 {
+    ensureSimulator();
     if (mSim)
     {
         QMetaObject::invokeMethod(mSim.get(), "loadModel", Qt::QueuedConnection,
@@ -159,5 +157,56 @@ void dxMujocoInterface::shutdownThread()
     {
         mSimThread->quit();
         mSimThread->wait();
+        mSimThread = nullptr;
     }
+}
+
+void dxMujocoInterface::ensureSimulator()
+{
+    if (mSim)
+    {
+        return;
+    }
+
+    mSim = std::make_unique<dxMuJoCoRobotSimulator>();
+    mSimThread = new QThread(this);
+    mSim->moveToThread(mSimThread);
+
+    connect(mSim.get(), &dxMuJoCoRobotSimulator::modelLoaded, this, [this](mjModel* model)
+    {
+        mModelLoaded = (model != nullptr);
+        emit modelLoaded(model);
+    });
+    connect(mSim.get(), &dxMuJoCoRobotSimulator::stateUpdated, this, &dxMujocoInterface::stateUpdated);
+    connect(mSim.get(), &dxMuJoCoRobotSimulator::resetDone, this, &dxMujocoInterface::resetDone);
+    connect(mSim.get(), &dxMuJoCoRobotSimulator::error, this, &dxMujocoInterface::error);
+
+    mSimThread->start();
+}
+
+void dxMujocoInterface::shutdown()
+{
+    if (mShutdown)
+    {
+        return;
+    }
+    mShutdown = true;
+
+    if (mSim && mModelLoaded)
+    {
+        QMetaObject::invokeMethod(mSim.get(), "stop", Qt::BlockingQueuedConnection);
+        QMetaObject::invokeMethod(mSim.get(), "shutdownSimulator", Qt::BlockingQueuedConnection);
+    }
+    if (mSim)
+    {
+        QMetaObject::invokeMethod(mSim.get(), "deleteLater", Qt::BlockingQueuedConnection);
+        mSim.release();
+    }
+    shutdownThread();
+    mModelLoaded = false;
+}
+
+void dxMujocoInterface::clearViewer()
+{
+    mViewer = nullptr;
 }

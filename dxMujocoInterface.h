@@ -36,10 +36,13 @@ public:
 
     void setCtrlTargets(const std::vector<double>& targets);
     void setCtrlTargetsFromJointPositions(const std::vector<double>& jointPositions);
+    void setCtrlTargetsFromFullJointPositions(const std::vector<double>& jointPositions);
     void setJointPositions(const std::vector<double>& jointPositions);
     void setArmDofCount(int armDofCount);
     void closeGripper();
     void setGripperPosition(double ratio);
+    void shutdown();
+    void clearViewer();
 
 public slots:
     void loadModel(const QString& modelPath);
@@ -52,9 +55,12 @@ signals:
     void error(const QString& message);
 
 private:
+    void ensureSimulator();
     void shutdownThread();
 
-    std::unique_ptr<dxMuJoCoRobotViewer> mViewer;
-    std::unique_ptr<dxMuJoCoRobotSimulator> mSim;
     QThread* mSimThread = nullptr;
+    std::unique_ptr<dxMuJoCoRobotSimulator> mSim;
+    dxMuJoCoRobotViewer* mViewer = nullptr;
+    bool mShutdown = false;
+    bool mModelLoaded = false;
 };

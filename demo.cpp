@@ -39,7 +39,21 @@ demo::demo(dxMujocoInterface* interfacePtr, QObject* parent)
             const std::vector<double>& joints = mTrajectory.back();
             if (mInterface)
             {
-                mInterface->setCtrlTargetsFromJointPositions(joints);
+                if (mUseFullCtrl && !mFullCtrlTargets.empty())
+                {
+                    const size_t limit = std::min({ joints.size(),
+                                                    static_cast<size_t>(mArmDofCount),
+                                                    mFullCtrlTargets.size() });
+                    for (size_t i = 0; i < limit; ++i)
+                    {
+                        mFullCtrlTargets[i] = joints[i];
+                    }
+                    mInterface->setCtrlTargetsFromFullJointPositions(mFullCtrlTargets);
+                }
+                else
+                {
+                    mInterface->setCtrlTargetsFromJointPositions(joints);
+                }
             }
             return;
         }
@@ -47,7 +61,21 @@ demo::demo(dxMujocoInterface* interfacePtr, QObject* parent)
         const std::vector<double>& joints = mTrajectory[mTrajectoryIndex++];
         if (mInterface)
         {
-            mInterface->setCtrlTargetsFromJointPositions(joints);
+            if (mUseFullCtrl && !mFullCtrlTargets.empty())
+            {
+                const size_t limit = std::min({ joints.size(),
+                                                static_cast<size_t>(mArmDofCount),
+                                                mFullCtrlTargets.size() });
+                for (size_t i = 0; i < limit; ++i)
+                {
+                    mFullCtrlTargets[i] = joints[i];
+                }
+                mInterface->setCtrlTargetsFromFullJointPositions(mFullCtrlTargets);
+            }
+            else
+            {
+                mInterface->setCtrlTargetsFromJointPositions(joints);
+            }
         }
     });
 
@@ -64,6 +92,8 @@ bool demo::init()
     mKin = std::make_unique<dxKinMuJoCo>(mInterface->model(), mInterface->data());
 
     mInterface->setArmDofCount(6);
+    mArmDofCount = 6;
+    mFullCtrlTargets = mInterface->getRobotState().jointConf;
 
     emit updateUIMessage("Demo Initalised!!");
     return true;
@@ -342,6 +372,154 @@ void demo::testPickAndPlace()
     std::cout << "[testPickAndPlace3] returned to preplace" << std::endl;
 }
 
+void demo::testNewPickAndPlace()
+{
+    if (!mInterface || !mInterface->model() || !mKin)
+    {
+        return;
+    }
+
+    mjModel* model = mInterface->model();
+    const dxMuJoCoRobotState state = mInterface->getRobotState();
+    if (state.jointConf.empty())
+    {
+        return;
+    }
+
+    std::vector<double> fullTargets = state.jointConf;
+
+    std::vector<int> jointOrder(static_cast<size_t>(model->njnt), -1);
+    std::vector<int> orderedJointIds;
+    orderedJointIds.reserve(static_cast<size_t>(model->njnt));
+    int orderIndex = 0;
+    for (int jid = 0; jid < model->njnt; ++jid)
+    {
+        const int type = model->jnt_type[jid];
+        if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
+        {
+            continue;
+        }
+        jointOrder[jid] = orderIndex++;
+        orderedJointIds.push_back(jid);
+    }
+
+    const int totalDof = orderIndex;
+    const int toolDof = std::max(0, totalDof - mArmDofCount);
+    const int toolStart = std::min(mArmDofCount, totalDof);
+
+    auto setToolRatio = [&](double ratio)
+    {
+        if (toolDof <= 0)
+        {
+            return;
+        }
+        for (int i = 0; i < toolDof; ++i)
+        {
+            const int idx = toolStart + i;
+            if (idx < 0 || idx >= static_cast<int>(orderedJointIds.size()))
+            {
+                continue;
+            }
+            const int jid = orderedJointIds[static_cast<size_t>(idx)];
+            if (jid < 0 || jid >= model->njnt)
+            {
+                continue;
+            }
+            if (model->jnt_limited[jid])
+            {
+                const double lo = model->jnt_range[2 * jid];
+                const double hi = model->jnt_range[2 * jid + 1];
+                if (idx >= 0 && idx < static_cast<int>(fullTargets.size()))
+                {
+                    fullTargets[static_cast<size_t>(idx)] = lo + ratio * (hi - lo);
+                }
+            }
+        }
+    };
+
+    auto playArm = [&](const std::vector<double>& fromPose,
+                       const std::vector<double>& toPose,
+                       int steps) -> bool
+    {
+        std::vector<std::vector<double>> trajectory;
+        if (!planCartesianTo(fromPose, toPose, trajectory, steps))
+        {
+            return false;
+        }
+        if (trajectory.empty())
+        {
+            return false;
+        }
+
+        mFullCtrlTargets = fullTargets;
+        const bool ok = runFullTrajectory(trajectory);
+        fullTargets = mFullCtrlTargets;
+        return ok;
+    };
+
+    std::vector<double> cubePose = mInterface->getBodyPoseByName("lego_brick");
+    const double cubeX = cubePose[0];
+    const double cubeY = cubePose[1];
+    const double cubeZ = cubePose[2];
+
+    const double pregraspZ = cubeZ + 0.10;
+    const double graspZ = cubeZ + 0.02;
+    const double liftZ = cubeZ + 0.12;
+    const double placeX = cubeX + 0.20;
+    const double placeY = cubeY;
+    const double placeZ = cubeZ + 0.04;
+
+    auto makePose = [&](double x, double y, double z)
+    {
+        return std::vector<double>
+        {
+            x, y, z,
+            state.eeQuat[0], state.eeQuat[1], state.eeQuat[2], state.eeQuat[3]
+        };
+    };
+
+    const std::vector<double> startPose =
+    {
+        state.eePos[0], state.eePos[1], state.eePos[2],
+        state.eeQuat[0], state.eeQuat[1], state.eeQuat[2], state.eeQuat[3]
+    };
+    const std::vector<double> pregraspPose = makePose(cubeX, cubeY, pregraspZ);
+    const std::vector<double> graspPose = makePose(cubeX, cubeY, graspZ);
+    const std::vector<double> preplacePose = makePose(placeX, placeY, liftZ);
+    const std::vector<double> placePose = makePose(placeX, placeY, placeZ);
+
+    setToolRatio(kGripperOpenRatio);
+    mFullCtrlTargets = fullTargets;
+    waitFullSteps(10);
+    fullTargets = mFullCtrlTargets;
+
+    playArm(startPose, pregraspPose, 60);
+    playArm(pregraspPose, graspPose, 40);
+
+    mFullCtrlTargets = fullTargets;
+    waitFullSteps(20);
+    fullTargets = mFullCtrlTargets;
+
+    setToolRatio(kGripperCloseRatio);
+    mFullCtrlTargets = fullTargets;
+    waitFullSteps(25);
+    fullTargets = mFullCtrlTargets;
+
+    playArm(graspPose, pregraspPose, 40);
+    playArm(pregraspPose, preplacePose, 60);
+    playArm(preplacePose, placePose, 40);
+
+    mFullCtrlTargets = fullTargets;
+    waitFullSteps(40);
+    fullTargets = mFullCtrlTargets;
+    setToolRatio(kGripperOpenRatio);
+    mFullCtrlTargets = fullTargets;
+    waitFullSteps(80);
+    fullTargets = mFullCtrlTargets;
+
+    playArm(placePose, preplacePose, 40);
+}
+
 void demo::testCamera()
 {
     if (!mInterface)
@@ -441,6 +619,57 @@ void demo::waitSteps(int holdSteps)
     startTrajectoryPlayback();
     loop.exec();
     disconnect(conn);
+}
+
+bool demo::runFullTrajectory(const std::vector<std::vector<double>>& armTrajectory)
+{
+    if (!mInterface || armTrajectory.empty())
+    {
+        return false;
+    }
+    if (mFullCtrlTargets.empty())
+    {
+        mFullCtrlTargets = mInterface->getRobotState().jointConf;
+    }
+    if (mFullCtrlTargets.empty())
+    {
+        return false;
+    }
+
+    mTrajectory = armTrajectory;
+    mUseFullCtrl = true;
+
+    QEventLoop loop;
+    const QMetaObject::Connection conn = connect(this, &demo::trajectoryFinished, &loop, &QEventLoop::quit);
+    startTrajectoryPlayback();
+    loop.exec();
+    disconnect(conn);
+
+    mUseFullCtrl = false;
+    return true;
+}
+
+void demo::waitFullSteps(int holdSteps)
+{
+    if (!mInterface)
+    {
+        return;
+    }
+    if (mFullCtrlTargets.empty())
+    {
+        mFullCtrlTargets = mInterface->getRobotState().jointConf;
+    }
+    if (mFullCtrlTargets.empty())
+    {
+        return;
+    }
+
+    std::vector<double> armHold;
+    const size_t limit = std::min(static_cast<size_t>(mArmDofCount), mFullCtrlTargets.size());
+    armHold.assign(mFullCtrlTargets.begin(), mFullCtrlTargets.begin() + static_cast<long long>(limit));
+    const int clamped = std::max(1, holdSteps);
+    std::vector<std::vector<double>> armTrajectory(static_cast<size_t>(clamped), armHold);
+    runFullTrajectory(armTrajectory);
 }
 
 

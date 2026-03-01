@@ -42,9 +42,11 @@ public slots:
     void reset();
     void start();
     void stop();
+    void shutdownSimulator();
     void setArmDofCount(int armDofCount);
     void setCtrlTargets(const std::vector<double>& targets);
     void setCtrlTargetsFromJointPositions(const std::vector<double>& jointPositions);
+    void setCtrlTargetsFromFullJointPositions(const std::vector<double>& jointPositions);
     void setJointPositions(const std::vector<double>& jointPositions);
     void closeGripper();
     void setGripperPosition(double ratio);

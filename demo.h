@@ -31,6 +31,7 @@ public:
 
     void testPlannerCartesian();
     void testPickAndPlace();
+    void testNewPickAndPlace();
     void testCamera();
     void testCamera3D();
 
@@ -57,6 +58,8 @@ private:
                      const std::vector<double>& toPose,
                      int steps);
     void waitSteps(int holdSteps);
+    bool runFullTrajectory(const std::vector<std::vector<double>>& armTrajectory);
+    void waitFullSteps(int holdSteps);
 
     dxMujocoInterface* mInterface = nullptr;
 
@@ -64,6 +67,9 @@ private:
     size_t mTrajectoryIndex = 0;
     QTimer* mTrajectoryTimer = nullptr;
     EndBehavior mEndBehavior = EndBehavior::StopCommands;
+    bool mUseFullCtrl = false;
+    int mArmDofCount = 6;
+    std::vector<double> mFullCtrlTargets;
 
     std::unique_ptr<dxKinMuJoCo> mKin;
 };

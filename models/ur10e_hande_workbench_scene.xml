@@ -128,9 +128,13 @@
          ============================================================ -->
     <body name="mobile_workstation" pos="0.45 0 -0.89">
       <geom name="workstation_top" type="box" size="0.7025 0.455 0.02" pos="0 0 0.87" material="table_top" group="2"  contype="0" conaffinity="0" />
-      <geom name="workstation_top_col" type="box" size="0.7025 0.455 0.02" pos="0 0 0.87" material="table_top" group="3" contype="1" conaffinity="1" />
+      <geom name="workstation_top_col" type="box" size="0.7025 0.455 0.02" pos="0 0 0.87"
+            material="table_top" group="3" contype="1" conaffinity="1"
+            solref="0.003 1" solimp="0.9 0.95 0.001" condim="4" friction="1.0 0.2 0.0001" />
       <geom name="workstation_pad" type="box" size="0.69 0.44 0.003" pos="0 0 0.893" material="table_top" group="2"  contype="0" conaffinity="0" />
-      <geom name="workstation_pad_col" type="box" size="0.69 0.44 0.003" pos="0 0 0.893" material="table_top" group="3" contype="1" conaffinity="1" />
+      <geom name="workstation_pad_col" type="box" size="0.69 0.44 0.005" pos="0 0 0.893"
+            material="table_top" group="3" contype="1" conaffinity="1"
+            solref="0.003 1" solimp="0.9 0.95 0.001" condim="4" friction="1.0 0.2 0.0001" />
       <geom name="workstation_top_slat_1" type="box" size="0.7025 0.01 0.003" pos="0 -0.39 0.891" material="table_frame" group="2"  contype="0" conaffinity="0" />
       <geom name="workstation_top_slat_2" type="box" size="0.7025 0.01 0.003" pos="0 -0.31 0.891" material="table_frame" group="2"  contype="0" conaffinity="0" />
       <geom name="workstation_top_slat_3" type="box" size="0.7025 0.01 0.003" pos="0 -0.23 0.891" material="table_frame" group="2"  contype="0" conaffinity="0" />
@@ -191,7 +195,7 @@
     </body>
 	
 	<!-- LEGO brick (fixed for now): collision box + visual mesh -->
-    <body name="lego_brick" pos="0.6 -0.25 0.031" quat="1 0 0 0">
+    <body name="lego_brick" pos="0.6 -0.25 0.04" quat="1 0 0 0">
       <freejoint/>
 
       <!-- Collision + mass (keep similar "feel" to your 1 g cube) -->

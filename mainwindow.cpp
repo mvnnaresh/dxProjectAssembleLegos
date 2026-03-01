@@ -29,6 +29,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     mViewerContainer = QWidget::createWindowContainer(mViewer, this);
     setCentralWidget(mViewerContainer);
 
+    // Cleanup happens in closeEvent for a graceful shutdown.
+
+
     QDockWidget* dock = new QDockWidget("Controls", this);
     QWidget* dockWidget = new QWidget(dock);
     QVBoxLayout* dockLayout = new QVBoxLayout(dockWidget);
@@ -36,10 +39,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     QPushButton* testButton = new QPushButton("Test Planner", dockWidget);
     QPushButton* cartButton = new QPushButton("Test Cartesian", dockWidget);
     QPushButton* pickPlaceButton = new QPushButton("Test Pick/Place", dockWidget);
+    QPushButton* pickPlaceFullButton = new QPushButton("Test Pick/Place Full", dockWidget);
     mCameraButton = new QPushButton("Test Camera", dockWidget);
     QPushButton* camera3dButton = new QPushButton("Test Camera 3D", dockWidget);
     QPushButton* closeButton = new QPushButton("Close Gripper", dockWidget);
     QPushButton* openButton = new QPushButton("Open Gripper", dockWidget);
+    QPushButton* quitButton = new QPushButton("Quit", dockWidget);
     QSlider* gripperSlider = new QSlider(Qt::Horizontal, dockWidget);
 
     gripperSlider->setRange(0, 100);
@@ -48,11 +53,13 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     dockLayout->addWidget(testButton);
     dockLayout->addWidget(cartButton);
     dockLayout->addWidget(pickPlaceButton);
+    dockLayout->addWidget(pickPlaceFullButton);
     dockLayout->addWidget(mCameraButton);
     dockLayout->addWidget(camera3dButton);
     dockLayout->addWidget(closeButton);
     dockLayout->addWidget(openButton);
     dockLayout->addWidget(gripperSlider);
+    dockLayout->addWidget(quitButton);
     dockLayout->addStretch(1);
     dockWidget->setLayout(dockLayout);
     dock->setWidget(dockWidget);
@@ -206,6 +213,13 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
             mDemo->testPickAndPlace();
         }
     });
+    connect(pickPlaceFullButton, &QPushButton::clicked, this, [this]()
+    {
+        if (mDemo)
+        {
+            mDemo->testNewPickAndPlace();
+        }
+    });
 
     connect(mCameraButton, &QPushButton::clicked, this, [this]()
     {
@@ -253,6 +267,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
         {
             mDemo->setGripperPosition(static_cast<double>(value) / 100.0);
         }
+    });
+
+    connect(quitButton, &QPushButton::clicked, this, [this]()
+    {
+        close();
     });
 
 
@@ -320,4 +339,23 @@ void MainWindow::updateCameraButtonState()
     {
         mCameraButton->setStyleSheet("background-color: #b23b3b; color: white;");
     }
+}
+
+void MainWindow::shutdownApp()
+{
+    if (mViewer)
+    {
+        mViewer->setModel(nullptr);
+    }
+    if (mInterface)
+    {
+        mInterface->clearViewer();
+        mInterface->shutdown();
+    }
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    shutdownApp();
+    QMainWindow::closeEvent(event);
 }

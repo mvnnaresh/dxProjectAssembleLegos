@@ -5,13 +5,13 @@
 
 int main(int argc, char *argv[])
 {
-    QSurfaceFormat fmt;
-    fmt.setDepthBufferSize(24);
-    fmt.setStencilBufferSize(8);
-    fmt.setSamples(0);
-    fmt.setVersion(2, 1);
-    fmt.setProfile(QSurfaceFormat::CompatibilityProfile);
-    QSurfaceFormat::setDefaultFormat(fmt);
+    // QSurfaceFormat fmt;
+    // fmt.setDepthBufferSize(24);
+    // fmt.setStencilBufferSize(8);
+    // fmt.setSamples(0);
+    // fmt.setVersion(2, 1);
+    // fmt.setProfile(QSurfaceFormat::CompatibilityProfile);
+    // QSurfaceFormat::setDefaultFormat(fmt);
 
     QApplication::setAttribute(Qt::AA_DisableHighDpiScaling);
 

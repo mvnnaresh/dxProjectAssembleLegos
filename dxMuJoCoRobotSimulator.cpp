@@ -206,6 +206,68 @@ void dxMuJoCoRobotSimulator::setCtrlTargetsFromJointPositions(const std::vector<
     mHoldMode = HoldMode::HoldCtrlTargets;
 }
 
+void dxMuJoCoRobotSimulator::setCtrlTargetsFromFullJointPositions(const std::vector<double>& jointPositions)
+{
+    if (!mModel || jointPositions.empty())
+    {
+        return;
+    }
+
+    std::vector<int> jointOrder(static_cast<size_t>(mModel->njnt), -1);
+    int orderIndex = 0;
+    for (int jid = 0; jid < mModel->njnt; ++jid)
+    {
+        const int type = mModel->jnt_type[jid];
+        if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
+        {
+            continue;
+        }
+        jointOrder[jid] = orderIndex++;
+    }
+
+    std::vector<double> targets;
+    targets.assign(mData->ctrl, mData->ctrl + mModel->nu);
+    for (int aid = 0; aid < mModel->nu; ++aid)
+    {
+        if (mModel->actuator_trntype[aid] != mjTRN_JOINT)
+        {
+            continue;
+        }
+        const int jid = mModel->actuator_trnid[2 * aid];
+        if (jid < 0 || jid >= mModel->njnt)
+        {
+            continue;
+        }
+        const int idx = jointOrder[jid];
+        if (idx < 0 || idx >= static_cast<int>(jointPositions.size()))
+        {
+            continue;
+        }
+
+        double value = jointPositions[static_cast<size_t>(idx)];
+        if (mModel->jnt_limited[jid])
+        {
+            const double lo = mModel->jnt_range[2 * jid];
+            const double hi = mModel->jnt_range[2 * jid + 1];
+            if (value < lo)
+            {
+                value = lo;
+            }
+            else if (value > hi)
+            {
+                value = hi;
+            }
+        }
+        targets[static_cast<size_t>(aid)] = value;
+    }
+
+    std::lock_guard<std::mutex> lock(mTargetMutex);
+    mPendingCtrlTargets = targets;
+    mHasCtrlTargets = true;
+    mHoldCtrlTargets = targets;
+    mHoldMode = HoldMode::HoldCtrlTargets;
+}
+
 void dxMuJoCoRobotSimulator::setJointPositions(const std::vector<double>& jointPositions)
 {
     if (jointPositions.empty())
@@ -444,6 +506,12 @@ void dxMuJoCoRobotSimulator::stop()
         mTimer->stop();
     }
     mRunning = false;
+}
+
+void dxMuJoCoRobotSimulator::shutdownSimulator()
+{
+    stop();
+    shutdown();
 }
 
 void dxMuJoCoRobotSimulator::stepLoop()

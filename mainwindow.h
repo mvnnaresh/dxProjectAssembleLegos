@@ -28,6 +28,7 @@ public:
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
+    void closeEvent(QCloseEvent* event) override;
 
 
 private slots:
@@ -48,6 +49,7 @@ private:
 
     void setStatusMessage(const std::string& msg) const;
     void updateCameraButtonState();
+    void shutdownApp();
 };
 
 #endif // MAINWINDOW_H
