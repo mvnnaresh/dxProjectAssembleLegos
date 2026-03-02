@@ -32,6 +32,7 @@ public:
     void testPlannerCartesian();
     void testPickAndPlace();
     void testNewPickAndPlace();
+    void testLegoAssembly();
     void testCamera();
     void testCamera3D();
 

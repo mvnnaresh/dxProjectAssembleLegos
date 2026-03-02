@@ -445,6 +445,109 @@ void demo::testNewPickAndPlace()
     sendRobotToBlockingFull(placePose, preplacePose, 40, sleepMs);
 }
 
+void demo::testLegoAssembly()
+{
+    if (!mInterface || !mInterface->model() || !mKin)
+    {
+        return;
+    }
+
+    const dxMuJoCoRobotState state = mInterface->getRobotState();
+    if (state.jointConf.empty())
+    {
+        return;
+    }
+
+    const int sleepMs = 20;
+    const double liftOffset = 0.12;
+    const double pregraspOffset = 0.10;
+    const double graspOffset = 0.02;
+    const double stackOffset = 0.04;
+
+    auto makePose = [&](double x, double y, double z)
+    {
+        return std::vector<double>
+        {
+            x, y, z,
+            state.eeQuat[0], state.eeQuat[1], state.eeQuat[2], state.eeQuat[3]
+        };
+    };
+
+    auto pickAndPlace = [&](const std::string& pickBody,
+                            const std::vector<double>& placePose) -> bool
+    {
+        std::vector<double> pickPose = mInterface->getBodyPoseByName(pickBody);
+        if (pickPose.size() < 3)
+        {
+            return false;
+        }
+
+        const double pickX = pickPose[0];
+        const double pickY = pickPose[1];
+        const double pickZ = pickPose[2];
+        const std::vector<double> startPose =
+        {
+            state.eePos[0], state.eePos[1], state.eePos[2],
+            state.eeQuat[0], state.eeQuat[1], state.eeQuat[2], state.eeQuat[3]
+        };
+        const std::vector<double> pregraspPose = makePose(pickX, pickY, pickZ + pregraspOffset);
+        const std::vector<double> graspPose = makePose(pickX, pickY, pickZ + graspOffset);
+        const std::vector<double> liftPose = makePose(pickX, pickY, pickZ + liftOffset);
+        const std::vector<double> preplacePose = makePose(placePose[0], placePose[1], placePose[2] + liftOffset);
+
+        setToolRatioFull(kGripperOpenRatio);
+        waitStepsBlockingFull(10, sleepMs);
+
+        if (!sendRobotToBlockingFull(startPose, pregraspPose, 60, sleepMs))
+        {
+            return false;
+        }
+        if (!sendRobotToBlockingFull(pregraspPose, graspPose, 40, sleepMs))
+        {
+            return false;
+        }
+
+        waitStepsBlockingFull(10, sleepMs);
+        setToolRatioFull(kGripperCloseRatio);
+        waitStepsBlockingFull(20, sleepMs);
+
+        if (!sendRobotToBlockingFull(graspPose, liftPose, 40, sleepMs))
+        {
+            return false;
+        }
+        if (!sendRobotToBlockingFull(liftPose, preplacePose, 60, sleepMs))
+        {
+            return false;
+        }
+        if (!sendRobotToBlockingFull(preplacePose, placePose, 40, sleepMs))
+        {
+            return false;
+        }
+
+        waitStepsBlockingFull(10, sleepMs);
+        setToolRatioFull(kGripperOpenRatio);
+        waitStepsBlockingFull(30, sleepMs);
+
+        sendRobotToBlockingFull(placePose, preplacePose, 40, sleepMs);
+        return true;
+    };
+
+    std::vector<double> redPose = mInterface->getBodyPoseByName("lego_brick");
+    if (redPose.size() < 3)
+    {
+        return;
+    }
+
+    const std::vector<double> redPlacePose = makePose(redPose[0], redPose[1], redPose[2] + graspOffset);
+    if (!pickAndPlace("lego_brick", redPlacePose))
+    {
+        return;
+    }
+
+    const std::vector<double> stackPose = makePose(redPose[0], redPose[1], redPose[2] + stackOffset);
+    pickAndPlace("lego_brick_yellow", stackPose);
+}
+
 void demo::testCamera()
 {
     if (!mInterface)

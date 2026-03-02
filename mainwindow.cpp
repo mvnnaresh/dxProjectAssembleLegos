@@ -40,6 +40,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     QPushButton* cartButton = new QPushButton("Test Cartesian", dockWidget);
     QPushButton* pickPlaceButton = new QPushButton("Test Pick/Place", dockWidget);
     QPushButton* pickPlaceFullButton = new QPushButton("Test Pick/Place Full", dockWidget);
+    QPushButton* assembleButton = new QPushButton("Test Lego Assembly", dockWidget);
     mCameraButton = new QPushButton("Test Camera", dockWidget);
     QPushButton* camera3dButton = new QPushButton("Test Camera 3D", dockWidget);
     QPushButton* closeButton = new QPushButton("Close Gripper", dockWidget);
@@ -54,6 +55,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     dockLayout->addWidget(cartButton);
     dockLayout->addWidget(pickPlaceButton);
     dockLayout->addWidget(pickPlaceFullButton);
+    dockLayout->addWidget(assembleButton);
     dockLayout->addWidget(mCameraButton);
     dockLayout->addWidget(camera3dButton);
     dockLayout->addWidget(closeButton);
@@ -218,6 +220,13 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
         if (mDemo)
         {
             mDemo->testNewPickAndPlace();
+        }
+    });
+    connect(assembleButton, &QPushButton::clicked, this, [this]()
+    {
+        if (mDemo)
+        {
+            mDemo->testLegoAssembly();
         }
     });
 
