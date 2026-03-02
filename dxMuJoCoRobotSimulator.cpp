@@ -5,6 +5,7 @@
 #include <cstring>
 #include <cmath>
 
+#include <QDebug>
 namespace
 {
 // Clear generalized velocities to remove residual motion on startup/reset.
@@ -268,6 +269,72 @@ void dxMuJoCoRobotSimulator::setCtrlTargetsFromFullJointPositions(const std::vec
     mHoldMode = HoldMode::HoldCtrlTargets;
 }
 
+void dxMuJoCoRobotSimulator::setToolRatio(double ratio)
+{
+    if (!mModel || !mData)
+    {
+        return;
+    }
+    if (ratio < 0.0)
+    {
+        ratio = 0.0;
+    }
+    else if (ratio > 1.0)
+    {
+        ratio = 1.0;
+    }
+
+    std::vector<int> jointOrder(static_cast<size_t>(mModel->njnt), -1);
+    int orderIndex = 0;
+    for (int jid = 0; jid < mModel->njnt; ++jid)
+    {
+        const int type = mModel->jnt_type[jid];
+        if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
+        {
+            continue;
+        }
+        jointOrder[jid] = orderIndex++;
+    }
+
+    const int totalDof = orderIndex;
+    const int toolStart = (mArmDofCount >= 0) ? std::min(mArmDofCount, totalDof) : totalDof;
+
+    std::vector<double> targets;
+    targets.assign(mData->ctrl, mData->ctrl + mModel->nu);
+    for (int aid = 0; aid < mModel->nu; ++aid)
+    {
+        if (mModel->actuator_trntype[aid] != mjTRN_JOINT)
+        {
+            continue;
+        }
+        const int jid = mModel->actuator_trnid[2 * aid];
+        if (jid < 0 || jid >= mModel->njnt)
+        {
+            continue;
+        }
+        const int idx = jointOrder[jid];
+        if (idx < 0 || idx < toolStart)
+        {
+            continue;
+        }
+
+        double value = 0.0;
+        if (mModel->jnt_limited[jid])
+        {
+            const double lo = mModel->jnt_range[2 * jid];
+            const double hi = mModel->jnt_range[2 * jid + 1];
+            value = lo + ratio * (hi - lo);
+        }
+        targets[static_cast<size_t>(aid)] = value;
+    }
+
+    std::lock_guard<std::mutex> lock(mTargetMutex);
+    mPendingCtrlTargets = targets;
+    mHasCtrlTargets = true;
+    mHoldCtrlTargets = targets;
+    mHoldMode = HoldMode::HoldCtrlTargets;
+}
+
 void dxMuJoCoRobotSimulator::setJointPositions(const std::vector<double>& jointPositions)
 {
     if (jointPositions.empty())
@@ -403,6 +470,7 @@ void dxMuJoCoRobotSimulator::loadModel(const QString& modelPath)
         emit error("dxMuJoCoRobotSimulator: empty model path.");
         return;
     }
+    qDebug() << "dxMuJoCoRobotSimulator loading model:" << mModelPath;
 
     char err[1024] = { 0 };
     mModel = mj_loadXML(mModelPath.toStdString().c_str(), nullptr, err, sizeof(err));

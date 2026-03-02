@@ -39,8 +39,12 @@ public:
     void setCtrlTargetsFromFullJointPositions(const std::vector<double>& jointPositions);
     void setJointPositions(const std::vector<double>& jointPositions);
     void setArmDofCount(int armDofCount);
+    void setToolRatio(double ratio);
     void closeGripper();
     void setGripperPosition(double ratio);
+    std::vector<double> buildFullJointTargets(const std::vector<double>& armJointPositions,
+                                              int armDofCount,
+                                              double toolRatio) const;
     void shutdown();
     void clearViewer();
 

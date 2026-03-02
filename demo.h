@@ -57,7 +57,18 @@ private:
     bool sendRobotTo(const std::vector<double>& fromPose,
                      const std::vector<double>& toPose,
                      int steps);
+    bool sendRobotToBlocking(const std::vector<double>& fromPose,
+                             const std::vector<double>& toPose,
+                             int steps,
+                             int sleepMs);
+    bool sendRobotToBlockingFull(const std::vector<double>& fromPose,
+                                 const std::vector<double>& toPose,
+                                 int steps,
+                                 int sleepMs);
     void waitSteps(int holdSteps);
+    void waitStepsBlocking(int holdSteps, int sleepMs);
+    void waitStepsBlockingFull(int holdSteps, int sleepMs);
+    void setToolRatioFull(double ratio);
     bool runFullTrajectory(const std::vector<std::vector<double>>& armTrajectory);
     void waitFullSteps(int holdSteps);
 
@@ -70,6 +81,7 @@ private:
     bool mUseFullCtrl = false;
     int mArmDofCount = 6;
     std::vector<double> mFullCtrlTargets;
+    double mToolRatio = 0.0;
 
     std::unique_ptr<dxKinMuJoCo> mKin;
 };

@@ -44,6 +44,7 @@ public slots:
     void stop();
     void shutdownSimulator();
     void setArmDofCount(int armDofCount);
+    void setToolRatio(double ratio);
     void setCtrlTargets(const std::vector<double>& targets);
     void setCtrlTargetsFromJointPositions(const std::vector<double>& jointPositions);
     void setCtrlTargetsFromFullJointPositions(const std::vector<double>& jointPositions);

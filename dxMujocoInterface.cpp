@@ -1,5 +1,7 @@
 #include "dxMujocoInterface.h"
 
+#include <algorithm>
+
 #include <QMetaObject>
 #include <QMetaType>
 
@@ -116,6 +118,15 @@ void dxMujocoInterface::setArmDofCount(int armDofCount)
     }
 }
 
+void dxMujocoInterface::setToolRatio(double ratio)
+{
+    if (mSim)
+    {
+        QMetaObject::invokeMethod(mSim.get(), "setToolRatio", Qt::QueuedConnection,
+                                  Q_ARG(double, ratio));
+    }
+}
+
 void dxMujocoInterface::closeGripper()
 {
     if (mSim)
@@ -131,6 +142,75 @@ void dxMujocoInterface::setGripperPosition(double ratio)
         QMetaObject::invokeMethod(mSim.get(), "setGripperPosition", Qt::QueuedConnection,
                                   Q_ARG(double, ratio));
     }
+}
+
+std::vector<double> dxMujocoInterface::buildFullJointTargets(const std::vector<double>& armJointPositions,
+                                                             int armDofCount,
+                                                             double toolRatio) const
+{
+    std::vector<double> full;
+    const dxMuJoCoRobotState state = getRobotState();
+    if (state.jointConf.empty())
+    {
+        return full;
+    }
+    full = state.jointConf;
+
+    const size_t armLimit = std::min({ armJointPositions.size(),
+                                       static_cast<size_t>(std::max(0, armDofCount)),
+                                       full.size() });
+    for (size_t i = 0; i < armLimit; ++i)
+    {
+        full[i] = armJointPositions[i];
+    }
+
+    if (toolRatio < 0.0)
+    {
+        return full;
+    }
+    if (!mSim || !mSim->model())
+    {
+        return full;
+    }
+
+    if (toolRatio > 1.0)
+    {
+        toolRatio = 1.0;
+    }
+    else if (toolRatio < 0.0)
+    {
+        toolRatio = 0.0;
+    }
+
+    mjModel* model = mSim->model();
+    std::vector<int> jointIds;
+    jointIds.reserve(static_cast<size_t>(model->njnt));
+    for (int jid = 0; jid < model->njnt; ++jid)
+    {
+        const int type = model->jnt_type[jid];
+        if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
+        {
+            continue;
+        }
+        jointIds.push_back(jid);
+    }
+
+    const int totalDof = static_cast<int>(jointIds.size());
+    const int toolStart = (armDofCount >= 0) ? std::min(armDofCount, totalDof) : totalDof;
+    const size_t limit = std::min(static_cast<size_t>(totalDof), full.size());
+    for (size_t idx = static_cast<size_t>(std::max(0, toolStart)); idx < limit; ++idx)
+    {
+        const int jid = jointIds[idx];
+        if (jid < 0 || jid >= model->njnt || !model->jnt_limited[jid])
+        {
+            continue;
+        }
+        const double lo = model->jnt_range[2 * jid];
+        const double hi = model->jnt_range[2 * jid + 1];
+        full[idx] = lo + toolRatio * (hi - lo);
+    }
+
+    return full;
 }
 
 void dxMujocoInterface::loadModel(const QString& modelPath)

@@ -1,8 +1,10 @@
 #include "demo.h"
 
 #include <iostream>
+#include <QApplication>
 #include <QEventLoop>
 #include <QMetaObject>
+#include <QThread>
 #include <QTimer>
 
 #include "dxKinMuJoCo.h"
@@ -43,7 +45,8 @@ demo::demo(dxMujocoInterface* interfacePtr, QObject* parent)
                 {
                     const size_t limit = std::min({ joints.size(),
                                                     static_cast<size_t>(mArmDofCount),
-                                                    mFullCtrlTargets.size() });
+                                                    mFullCtrlTargets.size()
+                                                  });
                     for (size_t i = 0; i < limit; ++i)
                     {
                         mFullCtrlTargets[i] = joints[i];
@@ -65,7 +68,8 @@ demo::demo(dxMujocoInterface* interfacePtr, QObject* parent)
             {
                 const size_t limit = std::min({ joints.size(),
                                                 static_cast<size_t>(mArmDofCount),
-                                                mFullCtrlTargets.size() });
+                                                mFullCtrlTargets.size()
+                                              });
                 for (size_t i = 0; i < limit; ++i)
                 {
                     mFullCtrlTargets[i] = joints[i];
@@ -94,6 +98,7 @@ bool demo::init()
     mInterface->setArmDofCount(6);
     mArmDofCount = 6;
     mFullCtrlTargets = mInterface->getRobotState().jointConf;
+    mToolRatio = kGripperOpenRatio;
 
     emit updateUIMessage("Demo Initalised!!");
     return true;
@@ -379,83 +384,11 @@ void demo::testNewPickAndPlace()
         return;
     }
 
-    mjModel* model = mInterface->model();
     const dxMuJoCoRobotState state = mInterface->getRobotState();
     if (state.jointConf.empty())
     {
         return;
     }
-
-    std::vector<double> fullTargets = state.jointConf;
-
-    std::vector<int> jointOrder(static_cast<size_t>(model->njnt), -1);
-    std::vector<int> orderedJointIds;
-    orderedJointIds.reserve(static_cast<size_t>(model->njnt));
-    int orderIndex = 0;
-    for (int jid = 0; jid < model->njnt; ++jid)
-    {
-        const int type = model->jnt_type[jid];
-        if (type != mjJNT_HINGE && type != mjJNT_SLIDE)
-        {
-            continue;
-        }
-        jointOrder[jid] = orderIndex++;
-        orderedJointIds.push_back(jid);
-    }
-
-    const int totalDof = orderIndex;
-    const int toolDof = std::max(0, totalDof - mArmDofCount);
-    const int toolStart = std::min(mArmDofCount, totalDof);
-
-    auto setToolRatio = [&](double ratio)
-    {
-        if (toolDof <= 0)
-        {
-            return;
-        }
-        for (int i = 0; i < toolDof; ++i)
-        {
-            const int idx = toolStart + i;
-            if (idx < 0 || idx >= static_cast<int>(orderedJointIds.size()))
-            {
-                continue;
-            }
-            const int jid = orderedJointIds[static_cast<size_t>(idx)];
-            if (jid < 0 || jid >= model->njnt)
-            {
-                continue;
-            }
-            if (model->jnt_limited[jid])
-            {
-                const double lo = model->jnt_range[2 * jid];
-                const double hi = model->jnt_range[2 * jid + 1];
-                if (idx >= 0 && idx < static_cast<int>(fullTargets.size()))
-                {
-                    fullTargets[static_cast<size_t>(idx)] = lo + ratio * (hi - lo);
-                }
-            }
-        }
-    };
-
-    auto playArm = [&](const std::vector<double>& fromPose,
-                       const std::vector<double>& toPose,
-                       int steps) -> bool
-    {
-        std::vector<std::vector<double>> trajectory;
-        if (!planCartesianTo(fromPose, toPose, trajectory, steps))
-        {
-            return false;
-        }
-        if (trajectory.empty())
-        {
-            return false;
-        }
-
-        mFullCtrlTargets = fullTargets;
-        const bool ok = runFullTrajectory(trajectory);
-        fullTargets = mFullCtrlTargets;
-        return ok;
-    };
 
     std::vector<double> cubePose = mInterface->getBodyPoseByName("lego_brick");
     const double cubeX = cubePose[0];
@@ -467,7 +400,7 @@ void demo::testNewPickAndPlace()
     const double liftZ = cubeZ + 0.12;
     const double placeX = cubeX + 0.20;
     const double placeY = cubeY;
-    const double placeZ = cubeZ + 0.04;
+    const double placeZ = cubeZ+ 0.02;
 
     auto makePose = [&](double x, double y, double z)
     {
@@ -488,36 +421,28 @@ void demo::testNewPickAndPlace()
     const std::vector<double> preplacePose = makePose(placeX, placeY, liftZ);
     const std::vector<double> placePose = makePose(placeX, placeY, placeZ);
 
-    setToolRatio(kGripperOpenRatio);
-    mFullCtrlTargets = fullTargets;
-    waitFullSteps(10);
-    fullTargets = mFullCtrlTargets;
+    const int sleepMs = 5; //latency
 
-    playArm(startPose, pregraspPose, 60);
-    playArm(pregraspPose, graspPose, 40);
+    setToolRatioFull(kGripperOpenRatio);
+    waitStepsBlockingFull(10, sleepMs);
 
-    mFullCtrlTargets = fullTargets;
-    waitFullSteps(20);
-    fullTargets = mFullCtrlTargets;
+    sendRobotToBlockingFull(startPose, pregraspPose, 60, sleepMs);
+    sendRobotToBlockingFull(pregraspPose, graspPose, 40, sleepMs);
 
-    setToolRatio(kGripperCloseRatio);
-    mFullCtrlTargets = fullTargets;
-    waitFullSteps(25);
-    fullTargets = mFullCtrlTargets;
+    waitStepsBlockingFull(10, sleepMs);
 
-    playArm(graspPose, pregraspPose, 40);
-    playArm(pregraspPose, preplacePose, 60);
-    playArm(preplacePose, placePose, 40);
+    setToolRatioFull(kGripperCloseRatio);
+    waitStepsBlockingFull(20, sleepMs);
 
-    mFullCtrlTargets = fullTargets;
-    waitFullSteps(40);
-    fullTargets = mFullCtrlTargets;
-    setToolRatio(kGripperOpenRatio);
-    mFullCtrlTargets = fullTargets;
-    waitFullSteps(80);
-    fullTargets = mFullCtrlTargets;
+    sendRobotToBlockingFull(graspPose, pregraspPose, 40, sleepMs);
+    sendRobotToBlockingFull(pregraspPose, preplacePose, 60, sleepMs);
+    sendRobotToBlockingFull(preplacePose, placePose, 40, sleepMs);
 
-    playArm(placePose, preplacePose, 40);
+    waitStepsBlockingFull(10, sleepMs);
+    setToolRatioFull(kGripperOpenRatio);
+    waitStepsBlockingFull(40, sleepMs);
+
+    sendRobotToBlockingFull(placePose, preplacePose, 40, sleepMs);
 }
 
 void demo::testCamera()
@@ -605,6 +530,81 @@ bool demo::sendRobotTo(const std::vector<double>& fromPose,
     return true;
 }
 
+bool demo::sendRobotToBlocking(const std::vector<double>& fromPose,
+                               const std::vector<double>& toPose,
+                               int steps,
+                               int sleepMs)
+{
+    std::vector<std::vector<double>> trajectory;
+    if (!planCartesianTo(fromPose, toPose, trajectory, steps))
+    {
+        return false;
+    }
+    if (trajectory.empty())
+    {
+        return false;
+    }
+
+    if (sleepMs < 0)
+    {
+        sleepMs = 0;
+    }
+
+    for (const auto& joints : trajectory)
+    {
+        if (mInterface)
+        {
+            mInterface->setCtrlTargetsFromJointPositions(joints);
+        }
+        QApplication::processEvents();
+        if (sleepMs > 0)
+        {
+            QThread::msleep(static_cast<unsigned long>(sleepMs));
+        }
+    }
+    return true;
+}
+
+bool demo::sendRobotToBlockingFull(const std::vector<double>& fromPose,
+                                   const std::vector<double>& toPose,
+                                   int steps,
+                                   int sleepMs)
+{
+    std::vector<std::vector<double>> trajectory;
+    if (!planCartesianTo(fromPose, toPose, trajectory, steps))
+    {
+        return false;
+    }
+    if (trajectory.empty())
+    {
+        return false;
+    }
+    if (!mInterface)
+    {
+        return false;
+    }
+    if (sleepMs < 0)
+    {
+        sleepMs = 0;
+    }
+
+    for (const auto& joints : trajectory)
+    {
+        const std::vector<double> fullTargets =
+            mInterface->buildFullJointTargets(joints, mArmDofCount, mToolRatio);
+        if (!fullTargets.empty())
+        {
+            mInterface->setCtrlTargetsFromFullJointPositions(fullTargets);
+        }
+        QApplication::processEvents();
+        if (sleepMs > 0)
+        {
+            QThread::msleep(static_cast<unsigned long>(sleepMs));
+        }
+    }
+    return true;
+}
+
 void demo::waitSteps(int holdSteps)
 {
     const dxMuJoCoRobotState holdState = mInterface->getRobotState();
@@ -619,6 +619,101 @@ void demo::waitSteps(int holdSteps)
     startTrajectoryPlayback();
     loop.exec();
     disconnect(conn);
+}
+
+void demo::waitStepsBlocking(int holdSteps, int sleepMs)
+{
+    if (!mInterface)
+    {
+        return;
+    }
+    if (sleepMs < 0)
+    {
+        sleepMs = 0;
+    }
+
+    const int count = std::max(1, holdSteps);
+    for (int i = 0; i < count; ++i)
+    {
+        QApplication::processEvents();
+        if (sleepMs > 0)
+        {
+            QThread::msleep(static_cast<unsigned long>(sleepMs));
+        }
+    }
+}
+
+void demo::waitStepsBlockingFull(int holdSteps, int sleepMs)
+{
+    if (!mInterface)
+    {
+        return;
+    }
+    const dxMuJoCoRobotState holdState = mInterface->getRobotState();
+    if (holdState.jointConf.empty())
+    {
+        return;
+    }
+    if (sleepMs < 0)
+    {
+        sleepMs = 0;
+    }
+
+    std::vector<double> armHold = holdState.jointConf;
+    if (armHold.size() > static_cast<size_t>(mArmDofCount))
+    {
+        armHold.resize(static_cast<size_t>(mArmDofCount));
+    }
+
+    const int count = std::max(1, holdSteps);
+    for (int i = 0; i < count; ++i)
+    {
+        const std::vector<double> fullTargets =
+            mInterface->buildFullJointTargets(armHold, mArmDofCount, mToolRatio);
+        if (!fullTargets.empty())
+        {
+            mInterface->setCtrlTargetsFromFullJointPositions(fullTargets);
+        }
+        QApplication::processEvents();
+        if (sleepMs > 0)
+        {
+            QThread::msleep(static_cast<unsigned long>(sleepMs));
+        }
+    }
+}
+
+void demo::setToolRatioFull(double ratio)
+{
+    if (ratio < 0.0)
+    {
+        ratio = 0.0;
+    }
+    else if (ratio > 1.0)
+    {
+        ratio = 1.0;
+    }
+    mToolRatio = ratio;
+
+    if (!mInterface)
+    {
+        return;
+    }
+    const dxMuJoCoRobotState state = mInterface->getRobotState();
+    if (state.jointConf.empty())
+    {
+        return;
+    }
+    std::vector<double> armHold = state.jointConf;
+    if (armHold.size() > static_cast<size_t>(mArmDofCount))
+    {
+        armHold.resize(static_cast<size_t>(mArmDofCount));
+    }
+    const std::vector<double> fullTargets =
+        mInterface->buildFullJointTargets(armHold, mArmDofCount, mToolRatio);
+    if (!fullTargets.empty())
+    {
+        mInterface->setCtrlTargetsFromFullJointPositions(fullTargets);
+    }
 }
 
 bool demo::runFullTrajectory(const std::vector<std::vector<double>>& armTrajectory)
