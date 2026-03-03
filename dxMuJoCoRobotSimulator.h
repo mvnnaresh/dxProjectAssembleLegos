@@ -25,7 +25,6 @@ public:
     dxMuJoCoRobotSimulator(const dxMuJoCoRobotSimulator&) = delete;
     dxMuJoCoRobotSimulator& operator=(const dxMuJoCoRobotSimulator&) = delete;
 
-    void setControlRateHz(double rateHz);
     double controlRateHz() const;
 
     mjModel* model() const;
@@ -43,6 +42,7 @@ public slots:
     void start();
     void stop();
     void shutdownSimulator();
+    void setControlRateHz(double rateHz);
     void setArmDofCount(int armDofCount);
     void setToolRatio(double ratio);
     void setCtrlTargets(const std::vector<double>& targets);

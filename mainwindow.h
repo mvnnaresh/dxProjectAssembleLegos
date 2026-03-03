@@ -45,7 +45,7 @@ private:
     QPushButton* mCameraButton = nullptr;
     bool mCameraStreaming = false;
     std::unordered_map<std::string, std::unique_ptr<dxVision>> mVisionByCamera;
-    std::string mModelPath = "models/ur10e_hande_workbench_scene.xml";
+    std::string mModelPath = "models/ur10e_hande_workbench_scene_lego_2x2.xml";
 
     void setStatusMessage(const std::string& msg) const;
     void updateCameraButtonState();

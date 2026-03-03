@@ -50,6 +50,15 @@ signals:
     void updateUIMessage(std::string msg);
 
 private:
+    struct BrickZInfo
+    {
+        double centerZ = 0.0;
+        double topZ = 0.0;
+        double bottomZ = 0.0;
+        double height = 0.0;
+        bool valid = false;
+    };
+
     void startTrajectoryPlayback();
     bool planCartesianTo(const std::vector<double>& startPose,
                          const std::vector<double>& goalPose,
@@ -72,6 +81,7 @@ private:
     void setToolRatioFull(double ratio);
     bool runFullTrajectory(const std::vector<std::vector<double>>& armTrajectory);
     void waitFullSteps(int holdSteps);
+    BrickZInfo computeBrickZInfo(const std::string& bodyName, const std::string& geomName) const;
 
     dxMujocoInterface* mInterface = nullptr;
 
