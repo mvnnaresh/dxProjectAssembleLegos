@@ -5,8 +5,8 @@
 
   <asset>
     <mesh name="brick_vis"
-          file="assets/brick_1x1.obj"
-          scale="0.001 0.001 0.001"/>
+          file="assets/lego_2x2.obj"/>
+          <!-- scale="0.001 0.001 0.001" -->
   </asset>
 
   <worldbody>
