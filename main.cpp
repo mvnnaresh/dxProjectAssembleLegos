@@ -19,6 +19,7 @@ int main(int argc, char *argv[])
     MainWindow w;
     w.setWindowFlags(Qt::WindowTitleHint | Qt::WindowMinimizeButtonHint
                      | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint | Qt::WindowSystemMenuHint);
+    w.resize(1920, 1500);
     w.show();
 
     return a.exec();

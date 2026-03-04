@@ -4,6 +4,10 @@
 #include <QMainWindow>
 #include <QLabel>
 #include <QPushButton>
+#include <QSlider>
+#include <QDockWidget>
+#include <QList>
+#include <QScrollArea>
 #include <QDebug>
 #include <memory>
 #include <unordered_map>
@@ -43,6 +47,12 @@ private:
     QWidget* mViewerContainer = nullptr;
     QLabel* mCameraLabel = nullptr;
     QPushButton* mCameraButton = nullptr;
+    QDockWidget* mControlDock = nullptr;
+    QScrollArea* mControlScroll = nullptr;
+    QWidget* mControlWidget = nullptr;
+    QSlider* mGripperSlider = nullptr;
+    QList<QPushButton*> mDockButtons;
+    QList<QLabel*> mSectionLabels;
     bool mCameraStreaming = false;
     std::unordered_map<std::string, std::unique_ptr<dxVision>> mVisionByCamera;
     std::string mModelPath = "models/ur10e_hande_workbench_scene_lego_2x2.xml";
@@ -50,6 +60,8 @@ private:
     void setStatusMessage(const std::string& msg) const;
     void updateCameraButtonState();
     void shutdownApp();
+    void applyControlStyling();
+    void updateControlSizing();
 };
 
 #endif // MAINWINDOW_H

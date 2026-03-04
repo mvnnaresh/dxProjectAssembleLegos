@@ -32,40 +32,135 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     // Cleanup happens in closeEvent for a graceful shutdown.
 
 
-    QDockWidget* dock = new QDockWidget("Controls", this);
-    QWidget* dockWidget = new QWidget(dock);
-    QVBoxLayout* dockLayout = new QVBoxLayout(dockWidget);
-    QPushButton* initButton = new QPushButton("Init", dockWidget);
-    QPushButton* testButton = new QPushButton("Test Planner", dockWidget);
-    QPushButton* cartButton = new QPushButton("Test Cartesian", dockWidget);
-    QPushButton* pickPlaceButton = new QPushButton("Test Pick/Place", dockWidget);
-    QPushButton* pickPlaceFullButton = new QPushButton("Test Pick/Place Full", dockWidget);
-    QPushButton* assembleButton = new QPushButton("Test Lego Assembly", dockWidget);
-    mCameraButton = new QPushButton("Test Camera", dockWidget);
-    QPushButton* camera3dButton = new QPushButton("Test Camera 3D", dockWidget);
-    QPushButton* closeButton = new QPushButton("Close Gripper", dockWidget);
-    QPushButton* openButton = new QPushButton("Open Gripper", dockWidget);
-    QPushButton* quitButton = new QPushButton("Quit", dockWidget);
-    QSlider* gripperSlider = new QSlider(Qt::Horizontal, dockWidget);
+    mControlDock = new QDockWidget("Controls", this);
+    mControlDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    mControlScroll = new QScrollArea(mControlDock);
+    mControlScroll->setWidgetResizable(true);
+    mControlWidget = new QWidget(mControlScroll);
+    QVBoxLayout* dockLayout = new QVBoxLayout(mControlWidget);
+    dockLayout->setContentsMargins(16, 16, 16, 16);
+    dockLayout->setSpacing(12);
+    auto makeSection = [&](const QString& text)
+    {
+        QLabel* label = new QLabel(text, mControlWidget);
+        label->setObjectName("sectionLabel");
+        mSectionLabels.push_back(label);
+        return label;
+    };
 
-    gripperSlider->setRange(0, 100);
-    gripperSlider->setValue(0);
+    QPushButton* initButton = new QPushButton("Init", mControlWidget);
+    QPushButton* testButton = new QPushButton("Test Planner", mControlWidget);
+    QPushButton* cartButton = new QPushButton("Test Cartesian", mControlWidget);
+    QPushButton* pickPlaceButton = new QPushButton("Test Pick/Place", mControlWidget);
+    QPushButton* pickPlaceFullButton = new QPushButton("Test Pick/Place Full", mControlWidget);
+    QPushButton* assembleButton = new QPushButton("Test Lego Assembly", mControlWidget);
+    mCameraButton = new QPushButton("Test Camera", mControlWidget);
+    QPushButton* camera3dButton = new QPushButton("Test Camera 3D", mControlWidget);
+    QPushButton* closeButton = new QPushButton("Close Gripper", mControlWidget);
+    QPushButton* openButton = new QPushButton("Open Gripper", mControlWidget);
+    QPushButton* quitButton = new QPushButton("Quit", mControlWidget);
+    mGripperSlider = new QSlider(Qt::Horizontal, mControlWidget);
+
+    mGripperSlider->setRange(0, 100);
+    mGripperSlider->setValue(0);
+    mDockButtons = { initButton, testButton, cartButton, pickPlaceButton,
+                     pickPlaceFullButton, assembleButton, mCameraButton,
+                     camera3dButton, closeButton, openButton, quitButton
+                   };
+    for (QPushButton* button : mDockButtons)
+    {
+        button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        button->setMinimumHeight(42);
+    }
+    mGripperSlider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    mGripperSlider->setMinimumHeight(26);
+
+    dockLayout->addWidget(makeSection("Simulation"));
     dockLayout->addWidget(initButton);
+    dockLayout->addSpacing(12);
+
+    dockLayout->addSpacing(8);
+    dockLayout->addWidget(makeSection("Planning"));
     dockLayout->addWidget(testButton);
     dockLayout->addWidget(cartButton);
     dockLayout->addWidget(pickPlaceButton);
     dockLayout->addWidget(pickPlaceFullButton);
     dockLayout->addWidget(assembleButton);
+    dockLayout->addSpacing(12);
+
+    dockLayout->addSpacing(8);
+    dockLayout->addWidget(makeSection("Vision"));
     dockLayout->addWidget(mCameraButton);
     dockLayout->addWidget(camera3dButton);
+    dockLayout->addSpacing(12);
+
+    dockLayout->addSpacing(8);
+    dockLayout->addWidget(makeSection("Gripper"));
     dockLayout->addWidget(closeButton);
     dockLayout->addWidget(openButton);
-    dockLayout->addWidget(gripperSlider);
-    dockLayout->addWidget(quitButton);
+    dockLayout->addWidget(mGripperSlider);
+    dockLayout->addSpacing(12);
+
     dockLayout->addStretch(1);
-    dockWidget->setLayout(dockLayout);
-    dock->setWidget(dockWidget);
-    addDockWidget(Qt::LeftDockWidgetArea, dock);
+    dockLayout->addWidget(quitButton);
+    mControlWidget->setLayout(dockLayout);
+    mControlWidget->setStyleSheet(
+        "QWidget {"
+        "  background-color: #111418;"
+        "  color: #e7edf6;"
+        "  font-family: \"Segoe UI Variable\";"
+        "  font-size: 28px;"
+        "}"
+        "QLabel#sectionLabel {"
+        "  color: #FF7F50;"
+        "  font-size: 28px;"
+        "  font-weight: 600;"
+        "  padding: 8px 4px 2px 4px;"
+        "  text-transform: uppercase;"
+        "}"
+        "QPushButton {"
+        "  background-color: #1b222b;"
+        "  border: 1px solid #2b3440;"
+        "  border-radius: 10px;"
+        "  padding: 10px 14px;"
+        "  text-align: center;"
+        "  font-weight: 600;"
+        "}"
+        "QPushButton:hover {"
+        "  background-color: #243040;"
+        "  border-color: #3c4a5b;"
+        "}"
+        "QPushButton:pressed {"
+        "  background-color: #161d25;"
+        "}"
+        "QPushButton:disabled {"
+        "  color: #8b98a7;"
+        "  background-color: #202933;"
+        "  border-color: #2a3440;"
+        "}"
+        "QSlider::groove:horizontal {"
+        "  height: 8px;"
+        "  background: #1b222b;"
+        "  border-radius: 4px;"
+        "}"
+        "QSlider::handle:horizontal {"
+        "  width: 18px;"
+        "  margin: -6px 0;"
+        "  border-radius: 9px;"
+        "  background: #7ac5ff;"
+        "  border: 1px solid #5aa8e6;"
+        "}"
+        "QSlider::sub-page:horizontal {"
+        "  background: #3b82f6;"
+        "  border-radius: 4px;"
+        "}"
+    );
+    applyControlStyling();
+    updateControlSizing();
+    mControlScroll->setWidget(mControlWidget);
+    mControlDock->setWidget(mControlScroll);
+    mControlDock->setMinimumWidth(280);
+    addDockWidget(Qt::LeftDockWidgetArea, mControlDock);
 
     mCameraLabel = new QLabel(mViewerContainer);
     mCameraLabel->setFixedSize(320, 240);
@@ -270,7 +365,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
             mDemo->openGripper();
         }
     });
-    connect(gripperSlider, &QSlider::valueChanged, this, [this](int value)
+    connect(mGripperSlider, &QSlider::valueChanged, this, [this](int value)
     {
         if (mDemo)
         {
@@ -282,7 +377,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     {
         close();
     });
-
 
 }
 
@@ -299,6 +393,7 @@ void MainWindow::resizeEvent(QResizeEvent* event)
         mCameraLabel->move(10, 10);
         mCameraLabel->raise();
     }
+    updateControlSizing();
 }
 
 void MainWindow::onModelLoaded(mjModel* model) const
@@ -360,6 +455,73 @@ void MainWindow::shutdownApp()
     {
         mInterface->clearViewer();
         mInterface->shutdown();
+    }
+}
+
+void MainWindow::applyControlStyling()
+{
+    QFont font("Segoe UI");
+    font.setPointSize(14);
+    mControlWidget->setFont(font);
+    for (QPushButton* button : mDockButtons)
+    {
+        if (!button)
+        {
+            continue;
+        }
+        button->setFont(font);
+    }
+    if (mGripperSlider)
+    {
+        mGripperSlider->setFont(font);
+    }
+}
+
+void MainWindow::updateControlSizing()
+{
+    if (!mControlWidget || mDockButtons.isEmpty())
+    {
+        return;
+    }
+
+    const int availableHeight = mControlWidget->height();
+    const int buttonCount = mDockButtons.size();
+    const int baseHeight = (buttonCount > 0) ? (availableHeight / (buttonCount + 6)) : 44;
+    const int buttonHeight = std::max(40, std::min(64, baseHeight));
+    const int fontSize = std::max(12, std::min(16, buttonHeight / 2));
+    const int sectionFontSize = std::max(11, std::min(13, fontSize - 2));
+    const int sliderHeight = std::max(24, buttonHeight / 2);
+
+    QFont buttonFont("Segoe UI Variable");
+    buttonFont.setPointSize(fontSize);
+    QFont sectionFont("Segoe UI Variable");
+    sectionFont.setPointSize(sectionFontSize);
+
+    for (QPushButton* button : mDockButtons)
+    {
+        if (!button)
+        {
+            continue;
+        }
+        button->setFont(buttonFont);
+        button->setMinimumHeight(buttonHeight);
+        button->setMaximumHeight(buttonHeight);
+    }
+
+    for (QLabel* label : mSectionLabels)
+    {
+        if (!label)
+        {
+            continue;
+        }
+        label->setFont(sectionFont);
+    }
+
+    if (mGripperSlider)
+    {
+        mGripperSlider->setFont(buttonFont);
+        mGripperSlider->setMinimumHeight(sliderHeight);
+        mGripperSlider->setMaximumHeight(sliderHeight);
     }
 }
 
