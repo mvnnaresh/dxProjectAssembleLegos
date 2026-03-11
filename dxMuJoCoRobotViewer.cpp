@@ -198,6 +198,18 @@ void dxMuJoCoRobotViewer::setCameraStreamResolution(int width, int height)
     }
 }
 
+void dxMuJoCoRobotViewer::setCameraStreamFovy(double fovyDeg)
+{
+    if (fovyDeg > 0.0)
+    {
+        mStreamCamera.setOverrideFovy(fovyDeg);
+    }
+    else
+    {
+        mStreamCamera.clearOverrideFovy();
+    }
+}
+
 void dxMuJoCoRobotViewer::setCameraStreamBaseBodyName(const QString& name)
 {
     mStreamBaseBodyName = name;

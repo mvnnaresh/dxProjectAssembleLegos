@@ -15,6 +15,11 @@
 
 #include <array>
 
+namespace
+{
+    constexpr double kTaskSpaceFovyDeg = 25.0;
+}
+
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
@@ -403,6 +408,7 @@ void MainWindow::onModelLoaded(mjModel* model) const
         mViewer->setModel(model);
         mViewer->setCameraStreamName("scene_cam");
         mViewer->setCameraStreamResolution(640, 480);
+        mViewer->setCameraStreamFovy(kTaskSpaceFovyDeg);
         mViewer->setCameraStreamBaseBodyName("base");
         this->onStateUpdated();
     }

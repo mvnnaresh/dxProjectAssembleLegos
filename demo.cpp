@@ -17,6 +17,7 @@ namespace
 {
 	constexpr double kGripperOpenRatio = 0.0;
 	constexpr double kGripperCloseRatio = 1.0;
+	constexpr double kTaskSpaceFovyDeg = 25.0;
 }
 
 demo::demo(dxMujocoInterface* interfacePtr, QObject* parent)
@@ -686,6 +687,7 @@ void demo::testCamera3D()
 		mujoparams.baseBodyName = "base";
 		mujoparams.width = 640;
 		mujoparams.height = 480;
+		mujoparams.fovyDeg = kTaskSpaceFovyDeg;
 
 		if (!camA.initMujocoCamera(mujoparams))
 		{

@@ -107,6 +107,7 @@ struct MuJoCoCameraParams
     std::string baseBodyName;
     int width = 640;
     int height = 480;
+    double fovyDeg = 0.0;
 };
 
 class dxVision

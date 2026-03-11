@@ -105,9 +105,23 @@ bool dxMuJoCoRealSense::captureRgbDepth(mjvOption* opt, mjrContext* ctx, Frame& 
 
     updateFixedCamera();
 
+    double prevFovy = 0.0;
+    bool overrideApplied = false;
+    if (mUseOverrideFovy && mModel && mCameraId >= 0 && mCameraId < mModel->ncam)
+    {
+        prevFovy = mModel->cam_fovy[mCameraId];
+        mModel->cam_fovy[mCameraId] = mOverrideFovy;
+        overrideApplied = true;
+    }
+
     mjrRect viewport = { 0, 0, mWidth, mHeight };
     mjv_updateScene(mModel, mData, opt, nullptr, &mCam, mjCAT_ALL, &mScn);
     mjr_render(viewport, &mScn, ctx);
+
+    if (overrideApplied)
+    {
+        mModel->cam_fovy[mCameraId] = prevFovy;
+    }
 
     frame.width = mWidth;
     frame.height = mHeight;

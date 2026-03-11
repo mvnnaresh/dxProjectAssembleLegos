@@ -43,6 +43,14 @@ bool dxVision::initMujocoCamera(const MuJoCoCameraParams& mujoparams)
 	mMujocoCamera.setCameraName(mCameraName);
 	mMujocoCamera.setBaseBodyName(mBaseBodyName);
 	mMujocoCamera.setResolution(mWidth, mHeight);
+	if (mujoparams.fovyDeg > 0.0)
+	{
+		mMujocoCamera.setOverrideFovy(mujoparams.fovyDeg);
+	}
+	else
+	{
+		mMujocoCamera.clearOverrideFovy();
+	}
 	return true;
 }
 

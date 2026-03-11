@@ -51,6 +51,7 @@ public slots:
     void setCameraStreamEnabled(bool enabled);
     void setCameraStreamName(const QString& name);
     void setCameraStreamResolution(int width, int height);
+    void setCameraStreamFovy(double fovyDeg);
     void setCameraStreamBaseBodyName(const QString& name);
     void requestPointCloudCapture();
 
