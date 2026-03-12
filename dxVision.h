@@ -131,7 +131,7 @@ public:
 
     bool initMujocoCamera(const MuJoCoCameraParams& mujoparams);
     cv::Mat acquireMujocoRgb();
-    CloudPtr acquireMujocoPointCloud();
+    CloudPtr acquireMujocoPointCloud(bool cropCloud = true, bool saveCloud=false);
 
     //View Point cloud with normal
     template <typename PointType, class CloudType>
