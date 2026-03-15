@@ -58,6 +58,7 @@ private:
     bool computePoseFromData(const mjData* data, PoseResult& out) const;
     void buildPoseVectorFromData(const mjData* data, std::vector<double>& out) const;
     bool getEEPose(const mjData* data, double pos[3], double mat[9]) const;
+    bool getLeafTip(const mjData* data, int bodyId, double tipPos[3], double offset[3]) const;
 
     mjModel* mModel = nullptr;
     mjData* mDataRef = nullptr;
@@ -65,10 +66,9 @@ private:
 
     int mEEBodyId = -1;
     int mEESiteId = -1;
-    bool mUseMidpoint = false;
-    int mEEMidBodyA = -1;
-    int mEEMidBodyB = -1;
+    bool mUseLeafCentroid = false;
     int mEEMidOrientBody = -1;
+    std::vector<int> mLeafBodies;
 
     std::vector<int> mJointIds;
     std::vector<int> mQposIndices;

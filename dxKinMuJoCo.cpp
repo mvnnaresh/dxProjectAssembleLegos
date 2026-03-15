@@ -78,10 +78,9 @@ bool dxKinMuJoCo::setModel(mjModel* model, mjData* data)
     mDataRef = data;
     mEEBodyId = -1;
     mEESiteId = -1;
-    mUseMidpoint = false;
-    mEEMidBodyA = -1;
-    mEEMidBodyB = -1;
+    mUseLeafCentroid = false;
     mEEMidOrientBody = -1;
+    mLeafBodies.clear();
     mJointIds.clear();
     mQposIndices.clear();
     mDofIndices.clear();
@@ -259,15 +258,8 @@ bool dxKinMuJoCo::getIK(const std::vector<double>& seed,
 
     std::vector<mjtNum> jacp(3 * mModel->nv, 0.0);
     std::vector<mjtNum> jacr(3 * mModel->nv, 0.0);
-    std::vector<mjtNum> jacpA;
-    std::vector<mjtNum> jacpB;
-    std::vector<mjtNum> jacrOrient;
-    if (mUseMidpoint)
-    {
-        jacpA.assign(3 * mModel->nv, 0.0);
-        jacpB.assign(3 * mModel->nv, 0.0);
-        jacrOrient.assign(3 * mModel->nv, 0.0);
-    }
+    std::vector<mjtNum> jacpTmp(3 * mModel->nv, 0.0);
+    std::vector<mjtNum> jacrTmp(3 * mModel->nv, 0.0);
 
     for (int iter = 0; iter < maxIters; ++iter)
     {
@@ -340,20 +332,55 @@ bool dxKinMuJoCo::getIK(const std::vector<double>& seed,
             return true;
         }
 
-        if (mUseMidpoint && mEEMidBodyA >= 0 && mEEMidBodyB >= 0)
+        if (!mLeafBodies.empty())
         {
-            mj_jacBody(mModel, mDataScratch, jacpA.data(), jacr.data(), mEEMidBodyA);
-            mj_jacBody(mModel, mDataScratch, jacpB.data(), jacr.data(), mEEMidBodyB);
-            for (int i = 0; i < 3 * mModel->nv; ++i)
+            std::fill(jacp.begin(), jacp.end(), 0.0);
+            const double weight = 1.0 / static_cast<double>(mLeafBodies.size());
+            for (int bodyId : mLeafBodies)
             {
-                jacp[i] = static_cast<mjtNum>(0.5) * (jacpA[i] + jacpB[i]);
+                mj_jacBody(mModel, mDataScratch, jacpTmp.data(), jacrTmp.data(), bodyId);
+
+                if (mLeafBodies.size() >= 2)
+                {
+                    for (int i = 0; i < 3 * mModel->nv; ++i)
+                    {
+                        jacp[i] += static_cast<mjtNum>(jacpTmp[i] * weight);
+                    }
+                    continue;
+                }
+
+                double offset[3] = { 0.0, 0.0, 0.0 };
+                double tipPos[3] = { 0.0, 0.0, 0.0 };
+                if (getLeafTip(mDataScratch, bodyId, tipPos, offset))
+                {
+                    for (int col = 0; col < mModel->nv; ++col)
+                    {
+                        const int jcol = 3 * col;
+                        const double wx = jacrTmp[jcol + 0];
+                        const double wy = jacrTmp[jcol + 1];
+                        const double wz = jacrTmp[jcol + 2];
+                        const double ox = offset[0];
+                        const double oy = offset[1];
+                        const double oz = offset[2];
+                        const double cx = wy * oz - wz * oy;
+                        const double cy = wz * ox - wx * oz;
+                        const double cz = wx * oy - wy * ox;
+                        jacp[jcol + 0] += static_cast<mjtNum>((jacpTmp[jcol + 0] + cx) * weight);
+                        jacp[jcol + 1] += static_cast<mjtNum>((jacpTmp[jcol + 1] + cy) * weight);
+                        jacp[jcol + 2] += static_cast<mjtNum>((jacpTmp[jcol + 2] + cz) * weight);
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < 3 * mModel->nv; ++i)
+                    {
+                        jacp[i] += static_cast<mjtNum>(jacpTmp[i] * weight);
+                    }
+                }
             }
+
             const int orientBody = (mEEMidOrientBody >= 0) ? mEEMidOrientBody : mEEBodyId;
-            mj_jacBody(mModel, mDataScratch, jacpA.data(), jacrOrient.data(), orientBody);
-            for (int i = 0; i < 3 * mModel->nv; ++i)
-            {
-                jacr[i] = jacrOrient[i];
-            }
+            mj_jacBody(mModel, mDataScratch, jacpTmp.data(), jacr.data(), orientBody);
         }
         else if (mEESiteId >= 0)
         {
@@ -561,10 +588,9 @@ bool dxKinMuJoCo::resolveEndEffectorBody()
         return false;
     }
 
-    mUseMidpoint = false;
-    mEEMidBodyA = -1;
-    mEEMidBodyB = -1;
+    mUseLeafCentroid = false;
     mEEMidOrientBody = -1;
+    mLeafBodies.clear();
 
     int bestBody = -1;
     int bestDepth = -1;
@@ -608,10 +634,19 @@ bool dxKinMuJoCo::resolveEndEffectorBody()
         {
             continue;
         }
-        const int parentId = mModel->body_parentid[bodyId];
-        if (parentId >= 0 && parentId < mModel->nbody && isChainBody[static_cast<size_t>(parentId)])
+        int cur = mModel->body_parentid[bodyId];
+        while (cur >= 0 && cur < mModel->nbody)
         {
-            hasChild[static_cast<size_t>(parentId)] = 1;
+            if (isChainBody[static_cast<size_t>(cur)])
+            {
+                hasChild[static_cast<size_t>(cur)] = 1;
+            }
+            const int next = mModel->body_parentid[cur];
+            if (next == cur)
+            {
+                break;
+            }
+            cur = next;
         }
     }
 
@@ -624,74 +659,11 @@ bool dxKinMuJoCo::resolveEndEffectorBody()
         }
     }
 
-    if (leafBodies.size() >= 2)
+    if (!leafBodies.empty())
     {
-        auto bodyDepth = [this](int bodyId)
-        {
-            int depth = 0;
-            int cur = bodyId;
-            while (cur > 0)
-            {
-                cur = mModel->body_parentid[cur];
-                ++depth;
-            }
-            return depth;
-        };
-
-        std::sort(leafBodies.begin(), leafBodies.end(),
-                  [&bodyDepth](int a, int b)
-                  {
-                      const int da = bodyDepth(a);
-                      const int db = bodyDepth(b);
-                      if (da != db)
-                      {
-                          return da > db;
-                      }
-                      return a > b;
-                  });
-
-        const int leafA = leafBodies[0];
-        const int leafB = leafBodies[1];
-
-        std::vector<char> ancestor(static_cast<size_t>(mModel->nbody), 0);
-        int cur = leafA;
-        while (cur >= 0 && cur < mModel->nbody)
-        {
-            ancestor[static_cast<size_t>(cur)] = 1;
-            const int parentId = mModel->body_parentid[cur];
-            if (parentId == cur)
-            {
-                break;
-            }
-            cur = parentId;
-        }
-
-        int orientBody = -1;
-        cur = leafB;
-        while (cur >= 0 && cur < mModel->nbody)
-        {
-            if (ancestor[static_cast<size_t>(cur)])
-            {
-                orientBody = cur;
-                break;
-            }
-            const int parentId = mModel->body_parentid[cur];
-            if (parentId == cur)
-            {
-                break;
-            }
-            cur = parentId;
-        }
-
-        if (orientBody < 0)
-        {
-            orientBody = bestBody;
-        }
-
-        mUseMidpoint = true;
-        mEEMidBodyA = leafA;
-        mEEMidBodyB = leafB;
-        mEEMidOrientBody = orientBody;
+        mLeafBodies = leafBodies;
+        mUseLeafCentroid = (leafBodies.size() >= 2);
+        mEEMidOrientBody = bestBody;
     }
 
     mEEBodyId = bestBody;
@@ -892,13 +864,45 @@ bool dxKinMuJoCo::getEEPose(const mjData* data, double pos[3], double mat[9]) co
         return false;
     }
 
-    if (mUseMidpoint && mEEMidBodyA >= 0 && mEEMidBodyB >= 0)
+    if (!mLeafBodies.empty())
     {
-        const double* posA = data->xpos + 3 * mEEMidBodyA;
-        const double* posB = data->xpos + 3 * mEEMidBodyB;
-        pos[0] = 0.5 * (posA[0] + posB[0]);
-        pos[1] = 0.5 * (posA[1] + posB[1]);
-        pos[2] = 0.5 * (posA[2] + posB[2]);
+        if (mLeafBodies.size() >= 2)
+        {
+            double center[3] = { 0.0, 0.0, 0.0 };
+            for (int bodyId : mLeafBodies)
+            {
+                const double* bodyPos = data->xpos + 3 * bodyId;
+                center[0] += bodyPos[0];
+                center[1] += bodyPos[1];
+                center[2] += bodyPos[2];
+            }
+            const double inv = 1.0 / static_cast<double>(mLeafBodies.size());
+            pos[0] = center[0] * inv;
+            pos[1] = center[1] * inv;
+            pos[2] = center[2] * inv;
+        }
+        else
+        {
+            double tipPos[3] = { 0.0, 0.0, 0.0 };
+            double offset[3] = { 0.0, 0.0, 0.0 };
+            if (getLeafTip(data, mLeafBodies.front(), tipPos, offset))
+            {
+                pos[0] = tipPos[0];
+                pos[1] = tipPos[1];
+                pos[2] = tipPos[2];
+            }
+            else if (mEEBodyId >= 0)
+            {
+                const double* posPtr = data->xpos + 3 * mEEBodyId;
+                pos[0] = posPtr[0];
+                pos[1] = posPtr[1];
+                pos[2] = posPtr[2];
+            }
+            else
+            {
+                return false;
+            }
+        }
 
         const int orientBody = (mEEMidOrientBody >= 0) ? mEEMidOrientBody : mEEBodyId;
         if (orientBody < 0)
@@ -942,4 +946,95 @@ bool dxKinMuJoCo::getEEPose(const mjData* data, double pos[3], double mat[9]) co
     }
 
     return false;
+}
+
+bool dxKinMuJoCo::getLeafTip(const mjData* data, int bodyId, double tipPos[3], double offset[3]) const
+{
+    if (!data || !mModel || bodyId < 0 || bodyId >= mModel->nbody)
+    {
+        return false;
+    }
+
+    const double* bodyPos = data->xpos + 3 * bodyId;
+    const int parentId = mModel->body_parentid[bodyId];
+    const double* parentPos = (parentId >= 0 && parentId < mModel->nbody && parentId != bodyId)
+        ? (data->xpos + 3 * parentId)
+        : bodyPos;
+
+    double bestDot = -1e30;
+    bool found = false;
+    for (int gid = 0; gid < mModel->ngeom; ++gid)
+    {
+        int geomBody = mModel->geom_bodyid[gid];
+        if (geomBody < 0 || geomBody >= mModel->nbody)
+        {
+            continue;
+        }
+        int cur = geomBody;
+        bool isDescendant = false;
+        while (cur >= 0 && cur < mModel->nbody)
+        {
+            if (cur == bodyId)
+            {
+                isDescendant = true;
+                break;
+            }
+            const int next = mModel->body_parentid[cur];
+            if (next == cur)
+            {
+                break;
+            }
+            cur = next;
+        }
+        if (!isDescendant)
+        {
+            continue;
+        }
+        const double* geomPos = data->geom_xpos + 3 * gid;
+        double dir[3] = { geomPos[0] - parentPos[0], geomPos[1] - parentPos[1], geomPos[2] - parentPos[2] };
+        const double dirNorm = std::sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
+        if (dirNorm > 1e-9)
+        {
+            dir[0] /= dirNorm;
+            dir[1] /= dirNorm;
+            dir[2] /= dirNorm;
+        }
+        else
+        {
+            dir[0] = 0.0;
+            dir[1] = 0.0;
+            dir[2] = 1.0;
+        }
+        const double rbound = mModel->geom_rbound[gid];
+        const double cand[3] =
+        {
+            geomPos[0] + dir[0] * rbound,
+            geomPos[1] + dir[1] * rbound,
+            geomPos[2] + dir[2] * rbound
+        };
+        const double dx = cand[0] - parentPos[0];
+        const double dy = cand[1] - parentPos[1];
+        const double dz = cand[2] - parentPos[2];
+        const double dot = dx * dx + dy * dy + dz * dz;
+        if (!found || dot > bestDot)
+        {
+            bestDot = dot;
+            tipPos[0] = cand[0];
+            tipPos[1] = cand[1];
+            tipPos[2] = cand[2];
+            found = true;
+        }
+    }
+
+    if (!found)
+    {
+        tipPos[0] = bodyPos[0];
+        tipPos[1] = bodyPos[1];
+        tipPos[2] = bodyPos[2];
+    }
+
+    offset[0] = tipPos[0] - bodyPos[0];
+    offset[1] = tipPos[1] - bodyPos[1];
+    offset[2] = tipPos[2] - bodyPos[2];
+    return true;
 }
