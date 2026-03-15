@@ -55,7 +55,7 @@ private:
     QList<QLabel*> mSectionLabels;
     bool mCameraStreaming = false;
     std::unordered_map<std::string, std::unique_ptr<dxVision>> mVisionByCamera;
-    std::string mModelPath = "models/ur10e_hande_workbench_scene_lego_2x2.xml";
+    std::string mModelPath = "models/ur10e_onrobot_2fg7_workbench_scene_lego_2x2.xml";
 
     void setStatusMessage(const std::string& msg) const;
     void updateCameraButtonState();

@@ -1,112 +1,115 @@
 <mujoco model="onrobot_2fg7">
 
-    <compiler angle="degree" coordinate="local"/>
-    <option gravity="0 0 -9.81"/>
+  <compiler angle="radian" coordinate="local" meshdir="assets" autolimits="true" />
+  <option gravity="0 0 -9.81"/>
 
-    <asset>
-        <mesh name="base_mesh"             file="assets/Base.stl"/>
-        <mesh name="left_finger_body"      file="assets/LeftFingerBody.stl"/>
-        <mesh name="left_finger_pad"       file="assets/LeftFingerPad.stl"/>
-        <mesh name="right_finger_body"     file="assets/RightFingerBody.stl"/>
-        <mesh name="right_finger_pad"      file="assets/RightFingerPad.stl"/>
-        <mesh name="left_finger_pad_coll"  file="assets/LeftFingerPad_Coll.stl"/>
-        <mesh name="right_finger_pad_coll" file="assets/RightFingerPad_Coll.stl"/>
+  <asset>
+    <mesh name="base_mesh"             file="Base.stl"/>
+    <mesh name="left_finger_body"      file="LeftFingerBody.stl"/>
+    <mesh name="left_finger_pad"       file="LeftFingerPad.stl"/>
+    <mesh name="right_finger_body"     file="RightFingerBody.stl"/>
+    <mesh name="right_finger_pad"      file="RightFingerPad.stl"/>
+    <mesh name="left_finger_pad_coll"  file="LeftFingerPad_Coll.stl"/>
+    <mesh name="right_finger_pad_coll" file="RightFingerPad_Coll.stl"/>
 
-        <material name="polished_aluminium"
-                  rgba="0.7 0.7 0.95 1"
-                  specular="0.95"
-                  shininess="0.7"
-                  reflectance="0.28"/>
+    <material name="polished_aluminium"
+              rgba="0.7 0.7 0.95 1"
+              specular="0.95"
+              shininess="0.7"
+              reflectance="0.28"/>
 
-        <material name="silicone_pad"
-                  rgba="0.05 0.05 0.05 1"
-                  specular="0.1"
-                  shininess="0.2"
-                  reflectance="0"/>
-    </asset>
+    <material name="silicone_pad"
+              rgba="0.05 0.05 0.05 1"
+              specular="0.1"
+              shininess="0.2"
+              reflectance="0"/>
+  </asset>
 
-    <contact>
-        <exclude body1="gripper_base" body2="left_finger"/>
-        <exclude body1="gripper_base" body2="right_finger"/>
-    </contact>
+  <contact>
+    <exclude body1="gripper_base" body2="left_finger"/>
+    <exclude body1="gripper_base" body2="right_finger"/>
+  </contact>
 
-    <worldbody>
-        <light pos="0 0 1.5"
-               dir="0 0 -1"
-               diffuse="1 1 1"
-               specular="0.3 0.3 0.3"/>
+  <worldbody>
+    <light pos="0 0 1.5"
+           dir="0 0 -1"
+           diffuse="1 1 1"
+           specular="0.3 0.3 0.3"/>
 
-        <body name="gripper_base" pos="0 0 0.11" euler="-90 0 0">
-            <geom type="mesh"
-                  mesh="base_mesh"
-                  material="polished_aluminium"/>
+    <body name="gripper_base" pos="0 0 0.11" euler="-1.57 0 0">
+      <inertial pos="0 0 0" mass="0.95" diaginertia="0.002 0.002 0.002"/>
+      <geom type="mesh"
+            mesh="base_mesh"
+            material="polished_aluminium"/>
 
-            <body name="left_finger" pos="0.010 0 0">
-                <joint name="left_slide"
-                       type="slide"
-                       axis="-1 0 0"
-                       range="0 0.019"
-                       damping="5"
-                       frictionloss="0.2"/>
+      <body name="left_finger" pos="0.010 0 0">
+        <inertial pos="0 0 0" mass="0.075" diaginertia="2e-5 2e-5 2e-5"/>
+        <joint name="left_slide"
+               type="slide"
+               axis="-1 0 0"
+               range="0 0.019"
+               damping="5"
+               frictionloss="0.2"/>
 
-                <geom type="mesh"
-                      mesh="left_finger_body"
-                      material="polished_aluminium"
-                      contype="0"
-                      conaffinity="0"/>
+        <geom type="mesh"
+              mesh="left_finger_body"
+              material="polished_aluminium"
+              contype="0"
+              conaffinity="0"/>
 
-                <geom type="mesh"
-                      mesh="left_finger_pad"
-                      material="silicone_pad"
-                      contype="0"
-                      conaffinity="0"/>
+        <geom type="mesh"
+              mesh="left_finger_pad"
+              material="silicone_pad"
+              contype="0"
+              conaffinity="0"/>
 
-                <geom type="mesh"
-                      mesh="left_finger_pad_coll"
-                      rgba="1 1 1 0"
-                      friction="1.0 0.02 0.002"/>
-            </body>
+        <geom type="mesh"
+              mesh="left_finger_pad_coll"
+              rgba="1 1 1 0"
+              friction="1.0 0.02 0.002"/>
+      </body>
 
-            <body name="right_finger" pos="-0.010 0 0">
-                <joint name="right_slide"
-                       type="slide"
-                       axis="1 0 0"
-                       range="0 0.019"
-                       damping="5"
-                       frictionloss="0.2"/>
+      <body name="right_finger" pos="-0.010 0 0">
+        <inertial pos="0 0 0" mass="0.075" diaginertia="2e-5 2e-5 2e-5"/>
+        <joint name="right_slide"
+               type="slide"
+               axis="1 0 0"
+               range="0 0.019"
+               damping="5"
+               frictionloss="0.2"/>
 
-                <geom type="mesh"
-                      mesh="right_finger_body"
-                      material="polished_aluminium"
-                      contype="0"
-                      conaffinity="0"/>
+        <geom type="mesh"
+              mesh="right_finger_body"
+              material="polished_aluminium"
+              contype="0"
+              conaffinity="0"/>
 
-                <geom type="mesh"
-                      mesh="right_finger_pad"
-                      material="silicone_pad"
-                      contype="0"
-                      conaffinity="0"/>
+        <geom type="mesh"
+              mesh="right_finger_pad"
+              material="silicone_pad"
+              contype="0"
+              conaffinity="0"/>
 
-                <geom type="mesh"
-                      mesh="right_finger_pad_coll"
-                      rgba="1 1 1 0"
-                      friction="1.0 0.02 0.002"/>
-            </body>
-        </body>
-    </worldbody>
+        <geom type="mesh"
+              mesh="right_finger_pad_coll"
+              rgba="1 1 1 0"
+              friction="1.0 0.02 0.002"/>
+      </body>
+    </body>
+  </worldbody>
 
-    <tendon>
-        <fixed name="gripper_tendon">
-            <joint joint="left_slide"  coef="1"/>
-            <joint joint="right_slide" coef="1"/>
-        </fixed>
-    </tendon>
+  <tendon>
+    <fixed name="gripper_tendon">
+      <joint joint="left_slide"  coef="1"/>
+      <joint joint="right_slide" coef="1"/>
+    </fixed>
+  </tendon>
 
-    <actuator>
-        <position name="gripper_act"
-                  tendon="gripper_tendon"
-                  kp="100"
-                  ctrlrange="0 0.038"/>
-    </actuator>
+  <actuator>
+    <position name="gripper_act"
+              tendon="gripper_tendon"
+              kp="100"
+              ctrlrange="0 0.038"/>
+  </actuator>
 
 </mujoco>

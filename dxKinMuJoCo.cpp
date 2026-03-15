@@ -78,6 +78,10 @@ bool dxKinMuJoCo::setModel(mjModel* model, mjData* data)
     mDataRef = data;
     mEEBodyId = -1;
     mEESiteId = -1;
+    mUseMidpoint = false;
+    mEEMidBodyA = -1;
+    mEEMidBodyB = -1;
+    mEEMidOrientBody = -1;
     mJointIds.clear();
     mQposIndices.clear();
     mDofIndices.clear();
@@ -255,22 +259,25 @@ bool dxKinMuJoCo::getIK(const std::vector<double>& seed,
 
     std::vector<mjtNum> jacp(3 * mModel->nv, 0.0);
     std::vector<mjtNum> jacr(3 * mModel->nv, 0.0);
+    std::vector<mjtNum> jacpA;
+    std::vector<mjtNum> jacpB;
+    std::vector<mjtNum> jacrOrient;
+    if (mUseMidpoint)
+    {
+        jacpA.assign(3 * mModel->nv, 0.0);
+        jacpB.assign(3 * mModel->nv, 0.0);
+        jacrOrient.assign(3 * mModel->nv, 0.0);
+    }
 
     for (int iter = 0; iter < maxIters; ++iter)
     {
         mj_forward(mModel, mDataScratch);
 
-        const double* pos = nullptr;
-        const double* mat = nullptr;
-        if (mEESiteId >= 0)
+        double pos[3] = { 0.0, 0.0, 0.0 };
+        double mat[9] = { 0.0 };
+        if (!getEEPose(mDataScratch, pos, mat))
         {
-            pos = mDataScratch->site_xpos + 3 * mEESiteId;
-            mat = mDataScratch->site_xmat + 9 * mEESiteId;
-        }
-        else
-        {
-            pos = mDataScratch->xpos + 3 * mEEBodyId;
-            mat = mDataScratch->xmat + 9 * mEEBodyId;
+            return false;
         }
 
         double currQuat[4] = { 1.0, 0.0, 0.0, 0.0 };
@@ -333,7 +340,22 @@ bool dxKinMuJoCo::getIK(const std::vector<double>& seed,
             return true;
         }
 
-        if (mEESiteId >= 0)
+        if (mUseMidpoint && mEEMidBodyA >= 0 && mEEMidBodyB >= 0)
+        {
+            mj_jacBody(mModel, mDataScratch, jacpA.data(), jacr.data(), mEEMidBodyA);
+            mj_jacBody(mModel, mDataScratch, jacpB.data(), jacr.data(), mEEMidBodyB);
+            for (int i = 0; i < 3 * mModel->nv; ++i)
+            {
+                jacp[i] = static_cast<mjtNum>(0.5) * (jacpA[i] + jacpB[i]);
+            }
+            const int orientBody = (mEEMidOrientBody >= 0) ? mEEMidOrientBody : mEEBodyId;
+            mj_jacBody(mModel, mDataScratch, jacpA.data(), jacrOrient.data(), orientBody);
+            for (int i = 0; i < 3 * mModel->nv; ++i)
+            {
+                jacr[i] = jacrOrient[i];
+            }
+        }
+        else if (mEESiteId >= 0)
         {
             mj_jacSite(mModel, mDataScratch, jacp.data(), jacr.data(), mEESiteId);
         }
@@ -539,16 +561,10 @@ bool dxKinMuJoCo::resolveEndEffectorBody()
         return false;
     }
 
-    const int tcpId = mj_name2id(mModel, mjOBJ_SITE, "tcp");
-    const int pinchId = mj_name2id(mModel, mjOBJ_SITE, "pinch");
-    if (tcpId >= 0)
-    {
-        mEESiteId = tcpId;
-    }
-    else if (pinchId >= 0)
-    {
-        mEESiteId = pinchId;
-    }
+    mUseMidpoint = false;
+    mEEMidBodyA = -1;
+    mEEMidBodyB = -1;
+    mEEMidOrientBody = -1;
 
     int bestBody = -1;
     int bestDepth = -1;
@@ -574,6 +590,108 @@ bool dxKinMuJoCo::resolveEndEffectorBody()
     if (bestBody < 0 && mModel->nbody > 1)
     {
         bestBody = mModel->nbody - 1;
+    }
+
+    std::vector<char> isChainBody(static_cast<size_t>(mModel->nbody), 0);
+    std::vector<char> hasChild(static_cast<size_t>(mModel->nbody), 0);
+    for (int jid : mJointIds)
+    {
+        const int bodyId = mModel->jnt_bodyid[jid];
+        if (bodyId >= 0 && bodyId < mModel->nbody)
+        {
+            isChainBody[static_cast<size_t>(bodyId)] = 1;
+        }
+    }
+    for (int bodyId = 0; bodyId < mModel->nbody; ++bodyId)
+    {
+        if (!isChainBody[static_cast<size_t>(bodyId)])
+        {
+            continue;
+        }
+        const int parentId = mModel->body_parentid[bodyId];
+        if (parentId >= 0 && parentId < mModel->nbody && isChainBody[static_cast<size_t>(parentId)])
+        {
+            hasChild[static_cast<size_t>(parentId)] = 1;
+        }
+    }
+
+    std::vector<int> leafBodies;
+    for (int bodyId = 0; bodyId < mModel->nbody; ++bodyId)
+    {
+        if (isChainBody[static_cast<size_t>(bodyId)] && !hasChild[static_cast<size_t>(bodyId)])
+        {
+            leafBodies.push_back(bodyId);
+        }
+    }
+
+    if (leafBodies.size() >= 2)
+    {
+        auto bodyDepth = [this](int bodyId)
+        {
+            int depth = 0;
+            int cur = bodyId;
+            while (cur > 0)
+            {
+                cur = mModel->body_parentid[cur];
+                ++depth;
+            }
+            return depth;
+        };
+
+        std::sort(leafBodies.begin(), leafBodies.end(),
+                  [&bodyDepth](int a, int b)
+                  {
+                      const int da = bodyDepth(a);
+                      const int db = bodyDepth(b);
+                      if (da != db)
+                      {
+                          return da > db;
+                      }
+                      return a > b;
+                  });
+
+        const int leafA = leafBodies[0];
+        const int leafB = leafBodies[1];
+
+        std::vector<char> ancestor(static_cast<size_t>(mModel->nbody), 0);
+        int cur = leafA;
+        while (cur >= 0 && cur < mModel->nbody)
+        {
+            ancestor[static_cast<size_t>(cur)] = 1;
+            const int parentId = mModel->body_parentid[cur];
+            if (parentId == cur)
+            {
+                break;
+            }
+            cur = parentId;
+        }
+
+        int orientBody = -1;
+        cur = leafB;
+        while (cur >= 0 && cur < mModel->nbody)
+        {
+            if (ancestor[static_cast<size_t>(cur)])
+            {
+                orientBody = cur;
+                break;
+            }
+            const int parentId = mModel->body_parentid[cur];
+            if (parentId == cur)
+            {
+                break;
+            }
+            cur = parentId;
+        }
+
+        if (orientBody < 0)
+        {
+            orientBody = bestBody;
+        }
+
+        mUseMidpoint = true;
+        mEEMidBodyA = leafA;
+        mEEMidBodyB = leafB;
+        mEEMidOrientBody = orientBody;
     }
 
     mEEBodyId = bestBody;
@@ -695,17 +813,11 @@ bool dxKinMuJoCo::computePoseFromData(const mjData* data, PoseResult& out) const
     {
         return false;
     }
-    const double* pos = nullptr;
-    const double* mat = nullptr;
-    if (mEESiteId >= 0)
+    double pos[3] = { 0.0, 0.0, 0.0 };
+    double mat[9] = { 0.0 };
+    if (!getEEPose(data, pos, mat))
     {
-        pos = data->site_xpos + 3 * mEESiteId;
-        mat = data->site_xmat + 9 * mEESiteId;
-    }
-    else
-    {
-        pos = data->xpos + 3 * mEEBodyId;
-        mat = data->xmat + 9 * mEEBodyId;
+        return false;
     }
 
     vpHomogeneousMatrix pose;
@@ -754,17 +866,11 @@ void dxKinMuJoCo::buildPoseVectorFromData(const mjData* data, std::vector<double
         return;
     }
 
-    const double* pos = nullptr;
-    const double* mat = nullptr;
-    if (mEESiteId >= 0)
+    double pos[3] = { 0.0, 0.0, 0.0 };
+    double mat[9] = { 0.0 };
+    if (!getEEPose(data, pos, mat))
     {
-        pos = data->site_xpos + 3 * mEESiteId;
-        mat = data->site_xmat + 9 * mEESiteId;
-    }
-    else
-    {
-        pos = data->xpos + 3 * mEEBodyId;
-        mat = data->xmat + 9 * mEEBodyId;
+        return;
     }
     double quat[4] = { 1.0, 0.0, 0.0, 0.0 };
     mju_mat2Quat(quat, mat);
@@ -777,4 +883,63 @@ void dxKinMuJoCo::buildPoseVectorFromData(const mjData* data, std::vector<double
     out.push_back(quat[1]);
     out.push_back(quat[2]);
     out.push_back(quat[3]);
+}
+
+bool dxKinMuJoCo::getEEPose(const mjData* data, double pos[3], double mat[9]) const
+{
+    if (!data)
+    {
+        return false;
+    }
+
+    if (mUseMidpoint && mEEMidBodyA >= 0 && mEEMidBodyB >= 0)
+    {
+        const double* posA = data->xpos + 3 * mEEMidBodyA;
+        const double* posB = data->xpos + 3 * mEEMidBodyB;
+        pos[0] = 0.5 * (posA[0] + posB[0]);
+        pos[1] = 0.5 * (posA[1] + posB[1]);
+        pos[2] = 0.5 * (posA[2] + posB[2]);
+
+        const int orientBody = (mEEMidOrientBody >= 0) ? mEEMidOrientBody : mEEBodyId;
+        if (orientBody < 0)
+        {
+            return false;
+        }
+        const double* matPtr = data->xmat + 9 * orientBody;
+        for (int i = 0; i < 9; ++i)
+        {
+            mat[i] = matPtr[i];
+        }
+        return true;
+    }
+
+    if (mEESiteId >= 0)
+    {
+        const double* posPtr = data->site_xpos + 3 * mEESiteId;
+        const double* matPtr = data->site_xmat + 9 * mEESiteId;
+        pos[0] = posPtr[0];
+        pos[1] = posPtr[1];
+        pos[2] = posPtr[2];
+        for (int i = 0; i < 9; ++i)
+        {
+            mat[i] = matPtr[i];
+        }
+        return true;
+    }
+
+    if (mEEBodyId >= 0)
+    {
+        const double* posPtr = data->xpos + 3 * mEEBodyId;
+        const double* matPtr = data->xmat + 9 * mEEBodyId;
+        pos[0] = posPtr[0];
+        pos[1] = posPtr[1];
+        pos[2] = posPtr[2];
+        for (int i = 0; i < 9; ++i)
+        {
+            mat[i] = matPtr[i];
+        }
+        return true;
+    }
+
+    return false;
 }
